@@ -10,10 +10,10 @@ class PrismCalendarCard extends HTMLElement {
 
   static getStubConfig() {
     return { 
-      entity: "calendar.example", 
-      max_events: 3,
-      icon_color: "#f87171",
-      dot_color: "#f87171"
+      entity_1: "calendar.example", 
+      color_1: "#f87171",
+      max_events: 5,
+      icon_color: "#f87171"
     }
   }
 
@@ -21,57 +21,116 @@ class PrismCalendarCard extends HTMLElement {
     return {
       schema: [
         {
-          name: "entity",
-          required: true,
-          selector: { entity: { domain: "calendar" } }
+          name: "",
+          type: "expandable",
+          title: "Kalender 1 (Hauptkalender)",
+          icon: "mdi:calendar",
+          schema: [
+            {
+              name: "entity_1",
+              required: true,
+              selector: { entity: { domain: "calendar" } }
+            },
+            {
+              name: "color_1",
+              selector: { color_rgb: {} }
+            }
+          ]
         },
         {
-          name: "max_events",
-          selector: { number: { min: 1, max: 10, step: 1, mode: "box" } }
+          name: "",
+          type: "expandable",
+          title: "Kalender 2 (Optional)",
+          icon: "mdi:calendar-plus",
+          schema: [
+            {
+              name: "entity_2",
+              selector: { entity: { domain: "calendar" } }
+            },
+            {
+              name: "color_2",
+              selector: { color_rgb: {} }
+            }
+          ]
         },
         {
-          name: "icon_color",
-          selector: { color_rgb: {} }
+          name: "",
+          type: "expandable",
+          title: "Kalender 3 (Optional)",
+          icon: "mdi:calendar-plus",
+          schema: [
+            {
+              name: "entity_3",
+              selector: { entity: { domain: "calendar" } }
+            },
+            {
+              name: "color_3",
+              selector: { color_rgb: {} }
+            }
+          ]
         },
         {
-          name: "dot_color",
-          selector: { color_rgb: {} }
+          name: "",
+          type: "expandable",
+          title: "Allgemeine Einstellungen",
+          icon: "mdi:cog",
+          schema: [
+            {
+              name: "max_events",
+              selector: { number: { min: 1, max: 10, step: 1, mode: "box" } }
+            },
+            {
+              name: "icon_color",
+              selector: { color_rgb: {} }
+            }
+          ]
         }
       ]
     };
   }
 
   setConfig(config) {
-    if (!config.entity) {
-      throw new Error('Please define an entity');
+    // Support both old (entity) and new (entity_1) config formats
+    const entity1 = config.entity_1 || config.entity;
+    if (!entity1) {
+      throw new Error('Please define at least one calendar entity (entity_1)');
     }
+    
     // Create a copy to avoid modifying read-only config object
     this.config = { ...config };
+    
+    // Migrate old config format
+    if (config.entity && !config.entity_1) {
+      this.config.entity_1 = config.entity;
+    }
+    if (config.dot_color && !config.color_1) {
+      this.config.color_1 = config.dot_color;
+    }
+    
     // Set defaults
     if (!this.config.max_events) {
-      this.config.max_events = 3;
+      this.config.max_events = 5;
     }
+    
     // Normalize colors (convert RGB arrays to hex if needed)
     if (this.config.icon_color) {
       this.config.icon_color = this._normalizeColor(this.config.icon_color);
     } else {
       this.config.icon_color = "#f87171";
     }
-    if (this.config.dot_color) {
-      this.config.dot_color = this._normalizeColor(this.config.dot_color);
-    } else {
-      this.config.dot_color = "#f87171";
-    }
+    
+    // Normalize calendar colors with defaults
+    this.config.color_1 = this._normalizeColor(this.config.color_1) || "#f87171";
+    this.config.color_2 = this._normalizeColor(this.config.color_2) || "#60a5fa";
+    this.config.color_3 = this._normalizeColor(this.config.color_3) || "#4ade80";
+    
     this._events = [];
     this.render();
   }
 
   set hass(hass) {
     this._hass = hass;
-    if (this.config && this.config.entity) {
-      const entity = hass.states[this.config.entity];
-      this._entity = entity || null;
-      
+    if (this.config && this.config.entity_1) {
       // Fetch calendar events every 60 seconds or on first load
       const now = Date.now();
       if (now - this._lastFetch > 60000 || this._events.length === 0) {
@@ -83,7 +142,7 @@ class PrismCalendarCard extends HTMLElement {
   }
 
   async _fetchCalendarEvents() {
-    if (!this._hass || !this.config.entity || this._loading) return;
+    if (!this._hass || !this.config.entity_1 || this._loading) return;
     
     this._loading = true;
     this._lastFetch = Date.now();
@@ -94,78 +153,98 @@ class PrismCalendarCard extends HTMLElement {
       const startDate = now.toISOString();
       const endDate = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000).toISOString();
       
-      // Use REST API (works with Google Calendar Integration)
-      const authToken = this._hass.auth.data.access_token || this._hass.auth.accessToken;
-      const response = await fetch(
-        `/api/calendars/${this.config.entity}?start=${encodeURIComponent(startDate)}&end=${encodeURIComponent(endDate)}`,
-        {
-          headers: {
-            'Authorization': `Bearer ${authToken}`,
-            'Content-Type': 'application/json'
-          }
-        }
-      );
-      
-      if (!response.ok) {
-        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+      // Collect all configured calendars
+      const calendars = [];
+      if (this.config.entity_1) {
+        calendars.push({ entity: this.config.entity_1, color: this.config.color_1 });
+      }
+      if (this.config.entity_2) {
+        calendars.push({ entity: this.config.entity_2, color: this.config.color_2 });
+      }
+      if (this.config.entity_3) {
+        calendars.push({ entity: this.config.entity_3, color: this.config.color_3 });
       }
       
-      const eventsArray = await response.json();
+      // Fetch events from all calendars in parallel
+      const authToken = this._hass.auth.data.access_token || this._hass.auth.accessToken;
       
-      // Process events - REST API returns array directly
-      if (Array.isArray(eventsArray) && eventsArray.length > 0) {
-        this._events = eventsArray
-          .map(event => {
-            // REST API returns: { start: { dateTime: "..." } or { date: "..." }, end: {...}, summary: "...", ... }
-            const title = event.summary || event.title || event.message || this._t('untitled');
-            // Handle both dateTime (timed) and date (all-day) formats
-            const start = event.start?.dateTime || event.start?.date || event.start;
-            const end = event.end?.dateTime || event.end?.date || event.end;
-            
-            return { title, start, end };
-          })
-          .filter(event => event.start)
-          .sort((a, b) => {
-            const dateA = new Date(a.start);
-            const dateB = new Date(b.start);
-            return dateA - dateB;
-          })
-          .slice(0, this.config.max_events || 3);
-      } else {
-        // Fallback to entity attributes if REST API returns empty
-        if (this._entity && this._entity.attributes) {
-          const attr = this._entity.attributes;
+      const fetchPromises = calendars.map(async (cal) => {
+        try {
+          const response = await fetch(
+            `/api/calendars/${cal.entity}?start=${encodeURIComponent(startDate)}&end=${encodeURIComponent(endDate)}`,
+            {
+              headers: {
+                'Authorization': `Bearer ${authToken}`,
+                'Content-Type': 'application/json'
+              }
+            }
+          );
+          
+          if (!response.ok) {
+            console.warn(`Prism Calendar: Failed to fetch ${cal.entity}: HTTP ${response.status}`);
+            return [];
+          }
+          
+          const eventsArray = await response.json();
+          
+          if (Array.isArray(eventsArray) && eventsArray.length > 0) {
+            return eventsArray.map(event => {
+              const title = event.summary || event.title || event.message || this._t('untitled');
+              const start = event.start?.dateTime || event.start?.date || event.start;
+              const end = event.end?.dateTime || event.end?.date || event.end;
+              
+              return { 
+                title, 
+                start, 
+                end, 
+                calendarEntity: cal.entity,
+                calendarColor: cal.color 
+              };
+            });
+          }
+          return [];
+        } catch (error) {
+          console.warn(`Prism Calendar: Error fetching ${cal.entity}:`, error);
+          return [];
+        }
+      });
+      
+      // Wait for all fetches to complete
+      const allEventsArrays = await Promise.all(fetchPromises);
+      
+      // Combine all events from all calendars
+      const allEvents = allEventsArrays.flat();
+      
+      // Sort by start date and limit to max_events
+      this._events = allEvents
+        .filter(event => event.start)
+        .sort((a, b) => {
+          const dateA = new Date(a.start);
+          const dateB = new Date(b.start);
+          return dateA - dateB;
+        })
+        .slice(0, this.config.max_events || 5);
+      
+      // Fallback to entity attributes if no events found
+      if (this._events.length === 0 && this.config.entity_1) {
+        const entity = this._hass.states[this.config.entity_1];
+        if (entity && entity.attributes) {
+          const attr = entity.attributes;
           if (attr.message && attr.start_time) {
             this._events = [{
               title: attr.message,
               start: attr.start_time,
-              end: attr.end_time || attr.start_time
+              end: attr.end_time || attr.start_time,
+              calendarEntity: this.config.entity_1,
+              calendarColor: this.config.color_1
             }];
-          } else {
-            this._events = [];
           }
-        } else {
-          this._events = [];
         }
       }
       
     } catch (error) {
       console.warn('Prism Calendar: Could not fetch calendar events:', error);
-      // Fallback to entity attributes
-      if (this._entity && this._entity.attributes) {
-        const attr = this._entity.attributes;
-        if (attr.message && attr.start_time) {
-          this._events = [{
-            title: attr.message,
-            start: attr.start_time,
-            end: attr.end_time || attr.start_time
-          }];
-        } else {
-          this._events = [];
-        }
-      } else {
-        this._events = [];
-      }
+      this._events = [];
     }
     
     this._loading = false;
@@ -211,11 +290,10 @@ class PrismCalendarCard extends HTMLElement {
   }
 
   render() {
-    if (!this.config || !this.config.entity) return;
+    if (!this.config || !this.config.entity_1) return;
     
-    const maxEvents = this.config.max_events || 3;
+    const maxEvents = this.config.max_events || 5;
     const iconColor = this._normalizeColor(this.config.icon_color || "#f87171");
-    const dotColor = this._normalizeColor(this.config.dot_color || "#f87171");
     const locale = this._getLocale();
     
     // Use fetched events
@@ -242,6 +320,7 @@ class PrismCalendarCard extends HTMLElement {
     } else {
       events.forEach((event, i) => {
         const isActive = i === 0;
+        const dotColor = event.calendarColor || this.config.color_1;
         let timeStr = this._t('all_day');
         
         if (event.start) {
@@ -279,10 +358,15 @@ class PrismCalendarCard extends HTMLElement {
           }
         }
         
+        // Dot styling: filled for active event, subtle border for others
+        const dotStyle = isActive 
+          ? `background: ${dotColor}; box-shadow: 0 0 8px ${dotColor}99;`
+          : `background: transparent; border: 2px solid ${this._hexToRgba(dotColor, 0.4)};`;
+        
         eventItems += `
           <div class="event-item" style="opacity: ${isActive ? '1' : '0.8'};">
             <div class="timeline">
-              <div class="dot ${isActive ? 'active' : ''}" style="${isActive ? `background: ${dotColor}; box-shadow: 0 0 8px ${dotColor}99;` : ''}"></div>
+              <div class="dot ${isActive ? 'active' : 'bordered'}" style="${dotStyle}"></div>
             </div>
             <div class="event-info">
               <div class="event-title">${event.title}</div>
@@ -369,10 +453,15 @@ class PrismCalendarCard extends HTMLElement {
         /* Visual alignment helper: The header icon is 42px wide. We want these dots centered relative to that column */
         
         .dot {
-            width: 8px; height: 8px; border-radius: 50%; background: rgba(255,255,255,0.2);
+            width: 10px; height: 10px; border-radius: 50%; background: rgba(255,255,255,0.2);
+            box-sizing: border-box;
         }
         .dot.active {
             /* Color set inline */
+        }
+        .dot.bordered {
+            width: 10px; height: 10px;
+            /* Border and color set inline */
         }
         
         .event-info {
@@ -401,6 +490,7 @@ class PrismCalendarCard extends HTMLElement {
   }
 
   _normalizeColor(color) {
+    if (!color) return null;
     // If color is an array [r, g, b] from color_rgb selector, convert to hex
     if (Array.isArray(color) && color.length >= 3) {
       const r = color[0].toString(16).padStart(2, '0');
@@ -413,6 +503,7 @@ class PrismCalendarCard extends HTMLElement {
   }
 
   _hexToRgba(hex, alpha) {
+    if (!hex || !hex.startsWith('#')) return `rgba(248, 113, 113, ${alpha})`;
     const r = parseInt(hex.slice(1, 3), 16);
     const g = parseInt(hex.slice(3, 5), 16);
     const b = parseInt(hex.slice(5, 7), 16);
@@ -427,5 +518,5 @@ window.customCards.push({
   type: "prism-calendar",
   name: "Prism Calendar",
   preview: true,
-  description: "A custom calendar card with configurable events and colors"
+  description: "A custom calendar card supporting up to 3 calendars with individual colors"
 });

@@ -1735,6 +1735,67 @@ class PrismCrealityCard extends HTMLElement {
             linear-gradient(135deg, transparent 48%, rgba(0,150,255,0.3) 48%, rgba(0,150,255,0.3) 56%, transparent 56%),
             linear-gradient(135deg, transparent 66%, rgba(0,150,255,0.4) 66%);
         }
+        
+        /* Mobile Responsive Styles */
+        @media (max-width: 600px) {
+          #prism-camera-popup-overlay {
+            padding: 0;
+          }
+          .prism-camera-popup {
+            min-width: unset;
+            min-height: unset;
+            width: 100vw !important;
+            height: 100vh !important;
+            max-width: 100vw;
+            max-height: 100vh;
+            border-radius: 0;
+            position: fixed !important;
+            top: 0 !important;
+            left: 0 !important;
+            margin: 0 !important;
+          }
+          .prism-camera-body {
+            flex-direction: column;
+          }
+          .prism-camera-content {
+            flex: 1;
+            min-height: 40vh;
+          }
+          .prism-camera-info {
+            position: static;
+            width: 100%;
+            max-height: 35vh;
+            border-radius: 0;
+            border: none;
+            border-top: 1px solid rgba(255,255,255,0.1);
+            overflow-y: auto;
+          }
+          .prism-info-content {
+            padding: 10px;
+            gap: 8px;
+          }
+          .prism-camera-footer {
+            flex-wrap: wrap;
+            gap: 8px;
+            padding: 10px 12px;
+          }
+          .prism-camera-footer-left {
+            flex-wrap: wrap;
+            gap: 6px;
+          }
+          .prism-camera-entity {
+            max-width: 200px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+          }
+          .prism-camera-resize-hint {
+            display: none;
+          }
+          .prism-camera-resize-handle {
+            display: none;
+          }
+        }
       </style>
       <div class="prism-camera-popup">
         <div class="prism-camera-header">
@@ -2649,6 +2710,47 @@ class PrismCrealityCard extends HTMLElement {
         }
         .prism-multi-resize-handle:hover::before {
           border-color: rgba(255,255,255,0.5);
+        }
+        
+        /* Mobile Responsive Styles for Multi-Printer Popup */
+        @media (max-width: 600px) {
+          #prism-camera-popup-overlay {
+            padding: 0;
+          }
+          .prism-multi-popup {
+            width: 100vw !important;
+            height: 100vh !important;
+            max-width: 100vw;
+            border-radius: 0;
+            position: fixed !important;
+            top: 0 !important;
+            left: 0 !important;
+            margin: 0 !important;
+          }
+          .prism-multi-grid {
+            padding: 8px;
+            gap: 8px;
+          }
+          .prism-multi-cell {
+            min-height: 180px;
+          }
+          .prism-multi-cell-header {
+            padding: 6px 10px;
+          }
+          .prism-multi-cell-name span {
+            font-size: 11px;
+          }
+          .prism-multi-info {
+            padding: 6px;
+            gap: 4px;
+          }
+          .prism-multi-stat {
+            font-size: 10px;
+            padding: 3px 6px;
+          }
+          .prism-multi-resize-handle {
+            display: none;
+          }
         }
       </style>
       <div class="prism-multi-popup">
