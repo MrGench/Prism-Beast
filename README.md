@@ -1,6 +1,6 @@
 <p align="center">
   <img src="https://raw.githubusercontent.com/BangerTech/Prism-Dashboard/main/custom-components/images/prism-logo.png" alt="Prism" width="130" align="middle"> 
-  <font size="6"><b>PRISM Dashboard</b></font>
+  <font size="7"><b>PRISM Dashboard</b></font>
 </p>
 
 <p align="center">
