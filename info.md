@@ -1,6 +1,11 @@
-## <img src="https://raw.githubusercontent.com/BangerTech/Prism-Dashboard/main/custom-components/images/prism-logo.png" alt="Prism" width="80" align="center"> Prism Dashboard
+<h1 align="center">
+  <img src="https://raw.githubusercontent.com/BangerTech/Prism-Dashboard/main/custom-components/images/prism-logo.png" alt="Prism" width="130"><br>
+  PRISM Dashboard
+</h1>
 
-A modern, glassmorphism-inspired dashboard and custom-cards for Home Assistant.
+<p align="center">
+  A modern, glassmorphism-inspired dashboard and custom-cards for Home Assistant.
+</p>
 
 ## Custom Cards Included
 
