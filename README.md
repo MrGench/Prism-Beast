@@ -1,14 +1,7 @@
 <div align="center">
-  <table style="border: none; border-collapse: collapse;">
-    <tr style="border: none;">
-      <td style="border: none;" valign="middle">
-        <img src="https://raw.githubusercontent.com/BangerTech/Prism-Dashboard/main/custom-components/images/prism-logo.png" alt="Prism" width="130">
-      </td>
-      <td style="border: none;" valign="middle">
-        <h1>PRISM Dashboard</h1>
-      </td>
-    </tr>
-  </table>
+
+# <img src="https://raw.githubusercontent.com/BangerTech/Prism-Dashboard/main/custom-components/images/prism-logo.png" alt="Prism" width="130" style="vertical-align: middle; margin-bottom: 10px;"> PRISM Dashboard
+
 </div>
 
 <p align="center">
