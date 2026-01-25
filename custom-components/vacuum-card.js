@@ -7,7 +7,7 @@ class PrismVacuumCard extends HTMLElement {
     static getStubConfig() {
       return { 
         entity: "vacuum.example", 
-        name: "Staubsauger"
+        name: "Vacuum"
       }
     }
 

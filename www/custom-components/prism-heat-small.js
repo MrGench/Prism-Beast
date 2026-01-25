@@ -5,7 +5,7 @@ class PrismHeatSmallCard extends HTMLElement {
   }
 
   static getStubConfig() {
-    return { entity: "climate.example", name: "Heizung", icon: "mdi:fire" }
+    return { entity: "climate.example", name: "Thermostat", icon: "mdi:fire" }
   }
 
   static getConfigForm() {

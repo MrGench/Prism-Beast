@@ -582,8 +582,8 @@ class PrismSidebarLightCard extends HTMLElement {
 
     updateClock() {
         const now = new Date();
-        const timeStr = now.toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' });
-        const dateStr = now.toLocaleDateString('de-DE', { weekday: 'long', day: 'numeric', month: 'short' });
+        const timeStr = now.toLocaleTimeString(this._getLocale(), { hour: '2-digit', minute: '2-digit' });
+        const dateStr = now.toLocaleDateString(this._getLocale(), { weekday: 'long', day: 'numeric', month: 'short' });
         
         const timeEl = this.shadowRoot?.getElementById('clock-time');
         const dateEl = this.shadowRoot?.getElementById('clock-date');
@@ -653,12 +653,12 @@ class PrismSidebarLightCard extends HTMLElement {
                     subText = this._t('all_day');
                 } else if (attr.start_time) {
                     const date = new Date(attr.start_time);
-                    subText = date.toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' });
+                    subText = date.toLocaleTimeString(this._getLocale(), { hour: '2-digit', minute: '2-digit' });
                 }
                 if (attr.location) {
                     subText += subText ? ` • ${attr.location}` : attr.location;
                 }
-                calSubEl.textContent = subText || 'Kein Termin';
+                calSubEl.textContent = subText || this._t('no_event');
             }
             if (calIconEl && attr.start_time) {
                 const date = new Date(attr.start_time);
@@ -764,7 +764,7 @@ class PrismSidebarLightCard extends HTMLElement {
         // Rebuild the entire forecast grid
         forecastGridEl.innerHTML = forecastSlice.map((day, i) => {
             const date = day.datetime ? new Date(day.datetime) : new Date();
-            const dayName = date.toLocaleDateString('de-DE', { weekday: 'short' });
+            const dayName = date.toLocaleDateString(this._getLocale(), { weekday: 'short' });
                     const iconMap = {
                         'sunny': 'mdi:weather-sunny',
                         'partlycloudy': 'mdi:weather-partly-cloudy',
@@ -845,7 +845,7 @@ class PrismSidebarLightCard extends HTMLElement {
         const calendarTitle = calendarState?.attributes?.message || this._t('no_events');
         const calendarSub = calendarState?.attributes?.all_day ? this._t('all_day') : 
                            (calendarState?.attributes?.start_time ? 
-                            new Date(calendarState.attributes.start_time).toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' }) : 
+                            new Date(calendarState.attributes.start_time).toLocaleTimeString(this._getLocale(), { hour: '2-digit', minute: '2-digit' }) : 
                             '');
         const calendarDate = calendarState?.attributes?.start_time ? 
                             new Date(calendarState.attributes.start_time).getDate() : 
@@ -1911,7 +1911,7 @@ class PrismSidebarLightCard extends HTMLElement {
                 <div class="forecast-grid">
                     ${forecast.map((day, i) => {
                         const date = day.datetime ? new Date(day.datetime) : new Date();
-                        const dayName = date.toLocaleDateString('de-DE', { weekday: 'short' });
+                        const dayName = date.toLocaleDateString(this._getLocale(), { weekday: 'short' });
                         const iconMap = {
                             'sunny': 'mdi:weather-sunny',
                             'partlycloudy': 'mdi:weather-partly-cloudy',
@@ -2147,29 +2147,29 @@ class PrismSidebarLightCard extends HTMLElement {
                         
                         let dateStr;
                         if (isToday) {
-                            dateStr = 'Heute';
+                            dateStr = this._t('today');
                         } else if (isTomorrow) {
-                            dateStr = 'Morgen';
+                            dateStr = this._t('tomorrow');
                         } else {
-                            dateStr = start.toLocaleDateString('de-DE', { weekday: 'short', day: 'numeric', month: 'short' });
+                            dateStr = start.toLocaleDateString(this._getLocale(), { weekday: 'short', day: 'numeric', month: 'short' });
                         }
                         
                         let timeStr;
                         if (isAllDay) {
-                            timeStr = 'Ganztägig';
+                            timeStr = this._t('all_day');
                         } else {
-                            timeStr = start.toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' }) + 
-                                     ' - ' + end.toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' });
+                            timeStr = start.toLocaleTimeString(this._getLocale(), { hour: '2-digit', minute: '2-digit' }) + 
+                                     ' - ' + end.toLocaleTimeString(this._getLocale(), { hour: '2-digit', minute: '2-digit' });
                         }
                         
                         return `
                             <div class="calendar-event ${isToday ? 'today' : ''} ${isTomorrow ? 'tomorrow' : ''}">
                                 <div class="calendar-event-date">
                                     <span class="calendar-event-day">${start.getDate()}</span>
-                                    <span class="calendar-event-month">${start.toLocaleDateString('de-DE', { month: 'short' })}</span>
+                                    <span class="calendar-event-month">${start.toLocaleDateString(this._getLocale(), { month: 'short' })}</span>
                                 </div>
                                 <div class="calendar-event-details">
-                                    <div class="calendar-event-title">${event.summary || 'Ohne Titel'}</div>
+                                    <div class="calendar-event-title">${event.summary || this._t('untitled')}</div>
                                     <div class="calendar-event-time">
                                         <ha-icon icon="${isAllDay ? 'mdi:calendar-today' : 'mdi:clock-outline'}" style="--mdc-icon-size: 12px;"></ha-icon>
                                         ${dateStr} • ${timeStr}
@@ -2188,7 +2188,7 @@ class PrismSidebarLightCard extends HTMLElement {
                 <div class="calendar-popup-footer">
                     <button class="calendar-more-info-btn">
                         <ha-icon icon="mdi:open-in-new" style="--mdc-icon-size: 16px;"></ha-icon>
-                        Alle Termine anzeigen
+                        ${this._t('show_all_events')}
                     </button>
                 </div>
             </div>
@@ -2578,11 +2578,11 @@ class PrismSidebarLightCard extends HTMLElement {
                     </div>
                     
                     ${forecast.length > 0 ? `
-                        <div class="weather-forecast-title">Vorhersage</div>
+                        <div class="weather-forecast-title">${this._t('forecast')}</div>
                         ${forecast.map((day, i) => {
                             const date = day.datetime ? new Date(day.datetime) : new Date();
                             const isToday = date.toDateString() === new Date().toDateString();
-                            const dayName = isToday ? 'Heute' : date.toLocaleDateString('de-DE', { weekday: 'short', day: 'numeric' });
+                            const dayName = isToday ? this._t('today') : date.toLocaleDateString(this._getLocale(), { weekday: 'short', day: 'numeric' });
                             const icon = iconMap[day.condition?.toLowerCase()] || 'mdi:weather-cloudy';
                             const iconColor = icon.includes('sunny') ? '#f59e0b' : 'rgba(0,0,0,0.5)';
                             const temp = day.temperature !== undefined ? day.temperature : '0';
@@ -3191,6 +3191,12 @@ class PrismSidebarLightCard extends HTMLElement {
         }
     }
 
+    // Get locale for date/time formatting based on HA language
+    _getLocale() {
+        const lang = this._hass?.language || this._hass?.locale?.language || 'en';
+        return lang.startsWith('de') ? 'de-DE' : 'en-US';
+    }
+
     // Translation helper - English default, German if HA is set to German
     _t(key) {
         const lang = this._hass?.language || this._hass?.locale?.language || 'en';
@@ -3198,7 +3204,13 @@ class PrismSidebarLightCard extends HTMLElement {
         
         const translations = {
             'all_day': isGerman ? 'Ganztägig' : 'All day',
-            'no_events': isGerman ? 'Keine Termine' : 'No events'
+            'no_events': isGerman ? 'Keine Termine' : 'No events',
+            'today': isGerman ? 'Heute' : 'Today',
+            'tomorrow': isGerman ? 'Morgen' : 'Tomorrow',
+            'untitled': isGerman ? 'Ohne Titel' : 'Untitled',
+            'no_event': isGerman ? 'Kein Termin' : 'No event',
+            'show_all_events': isGerman ? 'Alle Termine anzeigen' : 'Show all events',
+            'forecast': isGerman ? 'Vorhersage' : 'Forecast'
         };
         
         return translations[key] || key;

@@ -10,7 +10,7 @@ class PrismRoomCard extends HTMLElement {
 
   static getStubConfig() {
     return {
-      name: "Wohnzimmer",
+      name: "Room",
       icon: "mdi:sofa",
       show_icon: true,
       icon_size: 42,
