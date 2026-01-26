@@ -3,7 +3,7 @@
  * https://github.com/BangerTech/Prism-Dashboard
  * 
  * Version: 1.5.9
- * Build Date: 2026-01-26T16:59:57.587Z
+ * Build Date: 2026-01-26T17:11:08.677Z
  * 
  * This file contains all Prism custom cards bundled together.
  * Just add this single file as a resource in Lovelace:
@@ -41609,19 +41609,44 @@ class PrismCrealityCard extends HTMLElement {
         }
         
         /* CFS (Creality Filament System) Styles - Same as prism-bambu AMS */
-        .cfs-section {
-            margin-top: 16px;
-            padding-top: 16px;
-            border-top: 1px solid rgba(255, 255, 255, 0.05);
-        }
         .cfs-grid {
             display: grid;
             grid-template-columns: repeat(4, 1fr);
-            gap: 8px;
+            gap: 12px;
+            margin-bottom: 24px;
+            z-index: 20;
         }
-        .cfs-grid.slots-1 { grid-template-columns: 1fr; max-width: 80px; margin: 0 auto; }
-        .cfs-grid.slots-2 { grid-template-columns: repeat(2, 1fr); max-width: 170px; margin: 0 auto; }
-        .cfs-grid.slots-3 { grid-template-columns: repeat(3, 1fr); max-width: 260px; margin: 0 auto; }
+        /* For fewer slots, keep same slot size as 4-slot layout */
+        .cfs-grid.slots-1 {
+            grid-template-columns: repeat(4, 1fr);
+        }
+        .cfs-grid.slots-1 .cfs-slot {
+            grid-column: 2 / 3;
+        }
+        .cfs-grid.slots-2 {
+            grid-template-columns: repeat(4, 1fr);
+        }
+        .cfs-grid.slots-2 .cfs-slot:nth-child(1) {
+            grid-column: 2;
+        }
+        .cfs-grid.slots-2 .cfs-slot:nth-child(2) {
+            grid-column: 3;
+        }
+        .cfs-grid.slots-3 {
+            grid-template-columns: repeat(4, 1fr);
+        }
+        .cfs-grid.slots-3 .cfs-slot:nth-child(1) {
+            grid-column: 1;
+        }
+        .cfs-grid.slots-3 .cfs-slot:nth-child(2) {
+            grid-column: 2;
+        }
+        .cfs-grid.slots-3 .cfs-slot:nth-child(3) {
+            grid-column: 3;
+        }
+        .cfs-grid.hidden {
+            display: none;
+        }
         
         .cfs-slot {
             position: relative;
@@ -41727,7 +41752,8 @@ class PrismCrealityCard extends HTMLElement {
             display: flex;
             justify-content: center;
             gap: 12px;
-            margin-top: 12px;
+            margin-bottom: 20px;
+            margin-top: -8px;
         }
         .cfs-info-pill {
             display: flex;
@@ -41892,6 +41918,78 @@ class PrismCrealityCard extends HTMLElement {
             </div>
         </div>
 
+        ${data.showCfs && data.cfsData.length > 0 ? `
+        <div class="cfs-grid ${data.cfsData.length <= 3 ? 'slots-' + data.cfsData.length : ''}">
+            ${data.cfsData.map(slot => `
+                <div class="cfs-slot ${slot.active ? 'active' : ''} ${!slot.empty ? 'clickable' : ''} ${slot.transparent ? 'transparent' : ''}"
+                     ${!slot.empty ? `data-slot-id="${slot.id}"
+                     data-full-name="${(slot.fullName || '').replace(/"/g, '&quot;')}"
+                     data-type="${slot.type}"
+                     data-color="${slot.color}"
+                     data-remaining="${slot.remaining}"
+                     data-filament-type="${slot.filamentType || ''}"` : ''}>
+                    <div class="spool-visual">
+                        <div class="filament" style="background-color: ${slot.color};"></div>
+                        <div class="spool-center"></div>
+                        ${!slot.empty && slot.remaining >= 0 ? `<div class="remaining-badge">${slot.remaining}%</div>` : ''}
+                    </div>
+                    <div class="cfs-info">
+                        <div class="cfs-type">${slot.empty ? 'Empty' : slot.type}</div>
+                    </div>
+                </div>
+            `).join('')}
+        </div>
+        
+        ${data.showCfsInfo && (data.cfsTemperature !== null || data.cfsHumidity !== null) ? `
+        <div class="cfs-info-bar">
+            ${data.cfsTemperature !== null ? `
+            <div class="cfs-info-pill temp">
+                <div class="cfs-pill-icon"><ha-icon icon="mdi:thermometer"></ha-icon></div>
+                <div class="cfs-pill-content">
+                    <span class="cfs-pill-value">${Math.round(data.cfsTemperature)}°C</span>
+                    <span class="cfs-pill-label">CFS</span>
+                </div>
+            </div>
+            ` : ''}
+            ${data.cfsHumidity !== null ? `
+            <div class="cfs-info-pill humidity">
+                <div class="cfs-pill-icon"><ha-icon icon="mdi:water-percent"></ha-icon></div>
+                <div class="cfs-pill-content">
+                    <span class="cfs-pill-value">${Math.round(data.cfsHumidity)}%</span>
+                    <span class="cfs-pill-label">CFS</span>
+                </div>
+            </div>
+            ` : ''}
+        </div>
+        ` : ''}
+        
+        <!-- Filament Info Popup -->
+        <div class="filament-popup-overlay" style="display: none;">
+            <div class="filament-popup">
+                <div class="filament-popup-header">
+                    <div class="filament-popup-color"></div>
+                    <div class="filament-popup-title">
+                        <div class="filament-popup-name">Filament</div>
+                        <div class="filament-popup-type">Type</div>
+                    </div>
+                    <button class="filament-popup-close">
+                        <ha-icon icon="mdi:close"></ha-icon>
+                    </button>
+                </div>
+                <div class="filament-popup-body">
+                    <div class="filament-popup-stat">
+                        <span class="filament-popup-stat-label">Remaining</span>
+                        <span class="filament-popup-stat-value filament-stat-remaining">?%</span>
+                    </div>
+                    <div class="filament-popup-stat">
+                        <span class="filament-popup-stat-label">Position</span>
+                        <span class="filament-popup-stat-value filament-stat-slot">--</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+        ` : ''}
+
         <div class="main-visual ${!data.isLightOn ? 'light-off' : ''}">
             ${data.powerSwitch ? `
             <div class="power-btn-container">
@@ -42020,54 +42118,6 @@ class PrismCrealityCard extends HTMLElement {
             <div class="progress-text">${Math.round(data.progress)}%</div>
         </div>
 
-        ${data.showCfs && data.cfsData.length > 0 ? `
-        <div class="cfs-section">
-            <div class="cfs-grid ${data.cfsData.length <= 3 ? 'slots-' + data.cfsData.length : ''}">
-                ${data.cfsData.map(slot => `
-                    <div class="cfs-slot ${slot.active ? 'active' : ''} ${!slot.empty ? 'clickable' : ''} ${slot.transparent ? 'transparent' : ''}"
-                         ${!slot.empty ? `data-slot-id="${slot.id}"
-                         data-full-name="${(slot.fullName || '').replace(/"/g, '&quot;')}"
-                         data-type="${slot.type}"
-                         data-color="${slot.color}"
-                         data-remaining="${slot.remaining}"
-                         data-filament-type="${slot.filamentType || ''}"` : ''}>
-                        <div class="spool-visual">
-                            <div class="filament" style="background-color: ${slot.color};"></div>
-                            <div class="spool-center"></div>
-                            ${!slot.empty && slot.remaining >= 0 ? `<div class="remaining-badge">${slot.remaining}%</div>` : ''}
-                        </div>
-                        <div class="cfs-info">
-                            <div class="cfs-type">${slot.empty ? 'Empty' : slot.type}</div>
-                        </div>
-                    </div>
-                `).join('')}
-            </div>
-            
-            ${data.showCfsInfo && (data.cfsTemperature !== null || data.cfsHumidity !== null) ? `
-            <div class="cfs-info-bar">
-                ${data.cfsTemperature !== null ? `
-                <div class="cfs-info-pill temp">
-                    <div class="cfs-pill-icon"><ha-icon icon="mdi:thermometer"></ha-icon></div>
-                    <div class="cfs-pill-content">
-                        <span class="cfs-pill-value">${Math.round(data.cfsTemperature)}°C</span>
-                        <span class="cfs-pill-label">CFS</span>
-                    </div>
-                </div>
-                ` : ''}
-                ${data.cfsHumidity !== null ? `
-                <div class="cfs-info-pill humidity">
-                    <div class="cfs-pill-icon"><ha-icon icon="mdi:water-percent"></ha-icon></div>
-                    <div class="cfs-pill-content">
-                        <span class="cfs-pill-value">${Math.round(data.cfsHumidity)}%</span>
-                        <span class="cfs-pill-label">CFS</span>
-                    </div>
-                </div>
-                ` : ''}
-            </div>
-            ` : ''}
-        </div>
-        ` : ''}
-
         <div class="controls">
             <button class="btn btn-secondary btn-home" ${data.isIdle ? '' : 'disabled'} title="Home All Axes">
                 <ha-icon icon="mdi:home"></ha-icon>
@@ -42081,32 +42131,6 @@ class PrismCrealityCard extends HTMLElement {
             </button>
         </div>
 
-      </div>
-      
-      <!-- Filament Popup (for CFS slots) -->
-      <div class="filament-popup-overlay" style="display: none;">
-        <div class="filament-popup">
-          <div class="filament-popup-header">
-            <div class="filament-popup-color"></div>
-            <div class="filament-popup-title">
-              <div class="filament-popup-name">Filament</div>
-              <div class="filament-popup-type">Type</div>
-            </div>
-            <button class="filament-popup-close">
-              <ha-icon icon="mdi:close"></ha-icon>
-            </button>
-          </div>
-          <div class="filament-popup-body">
-            <div class="filament-popup-stat">
-              <span class="filament-popup-stat-label">Remaining</span>
-              <span class="filament-popup-stat-value filament-stat-remaining">?%</span>
-            </div>
-            <div class="filament-popup-stat">
-              <span class="filament-popup-stat-label">Position</span>
-              <span class="filament-popup-stat-value filament-stat-slot">--</span>
-            </div>
-          </div>
-        </div>
       </div>
     `;
 
