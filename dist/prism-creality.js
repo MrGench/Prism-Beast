@@ -1,5 +1,7 @@
 // Manufacturer and Models for device filtering
-// Supports: Creality-Control, Moonraker/Klipper integrations
+// Supports: ha_creality_ws (WebSocket), Moonraker/Klipper integrations
+// For Creality printers: Use ha_creality_ws integration (recommended)
+// For generic Klipper printers: Use prism-3dprinter.js instead
 const SUPPORTED_MANUFACTURERS = [
   'Creality',
   'Moonraker', 
@@ -9,42 +11,42 @@ const SUPPORTED_MANUFACTURERS = [
 ];
 
 const SUPPORTED_PRINTER_MODELS = [
-  // Creality K-Series (FDM)
+  // Creality K-Series (FDM) - supported by ha_creality_ws
   'K1', 'K1C', 'K1 Max', 'K1 SE', 'K1SE', 'K1 MAX',
-  'K2 Plus', 'K2 Pro', 'K2_PLUS', 'K2_PRO',
-  // Creality Halot Series (Resin)
-  'Halot', 'Halot One', 'Halot Max', 'Halot Sky',
+  'K2', 'K2 Plus', 'K2 Pro', 'K2_PLUS', 'K2_PRO',
+  // Creality Ender 3 V3 Series - supported by ha_creality_ws  
+  'Ender 3 V3', 'Ender 3 V3 KE', 'Ender 3 V3 Plus',
+  // Creality Hi - supported by ha_creality_ws
+  'Creality Hi',
   // Generic Creality
   'Creality Printer', 'Creality',
-  // Moonraker/Klipper - these often use printer name as model
+  // Moonraker/Klipper (for rooted Creality printers)
   '3D Printer', 'Printer', 'FDM Printer'
 ];
 
-// Legacy constants for backwards compatibility
-const CREALITY_MANUFACTURER = 'Creality';
-const CREALITY_PRINTER_MODELS = SUPPORTED_PRINTER_MODELS;
-
-// Entity keys to look for (based on Creality-Control sensor.py)
+// Entity keys to look for (ha_creality_ws + Moonraker)
 const ENTITY_KEYS = [
-  // Print Status
-  'state', 'deviceState', 'printProgress', 'layer', 'TotalLayer', 
-  'printLeftTime', 'printJobTime', 'printFileName', 'printId',
-  // Temperatures
-  'nozzleTemp', 'targetNozzleTemp', 'bedTemp0', 'targetBedTemp0', 'boxTemp',
-  // Fans
-  'fan', 'fanAuxiliary', 'fanCase', 'auxiliaryFanPct', 'caseFanPct', 'modelFanPct',
-  // Position & Speed
-  'curPosition', 'realTimeSpeed', 'realTimeFlow', 'curFeedratePct', 'curFlowratePct',
-  // Material
-  'usedMaterialLength', 'materialDetect', 'materialStatus',
-  // System
-  'model', 'hostname', 'modelVersion', 'connect', 'tfCard', 'video',
-  // Light
-  'lightSw',
-  // AI Features
-  'aiDetection', 'aiFirstFloor', 'aiPausePrint', 'aiSw',
-  // Error
-  'err', 'powerLoss'
+  // ha_creality_ws entities (https://github.com/3dg1luk43/ha_creality_ws)
+  'print_status',           // Status: idle, printing, paused, stopped, completed, error, self-testing
+  'print_progress',         // Progress in %
+  'print_left_time',        // Time left in SECONDS
+  'nozzle_temperature',     // Nozzle temp (with target attribute)
+  'bed_temperature',        // Bed temp (with target attribute)
+  'box_temperature',        // Chamber temp (with target attribute)
+  'current_layer',          // Current layer (field: "layer")
+  'total_layers',           // Total layers (field: "TotalLayer")
+  'current_print_preview',  // Image entity with model preview
+  // ha_creality_ws buttons
+  'pause_print', 'resume_print', 'stop_print',
+  // ha_creality_ws light (light domain, NOT switch!)
+  'light',
+  // Moonraker entities (for rooted printers)
+  'current_print_state', 'printer_state', 'status',
+  'progress', 'extruder_temperature', 'extruder_target',
+  'heater_bed_temperature', 'bed_target', 'heater_bed_target',
+  'chamber_temperature', 'enclosure_temp',
+  'total_layer', 'slicer_print_time_left_estimate', 'time_remaining', 'eta',
+  'cancel_print'
 ];
 
 class PrismCrealityCard extends HTMLElement {
@@ -68,7 +70,7 @@ class PrismCrealityCard extends HTMLElement {
 
   static getConfigForm() {
     // Build filter for printer device selector
-    // Support both Creality Control and Moonraker/Klipper integrations
+    // Support ha_creality_ws and Moonraker/Klipper integrations
     const printerFilterCombinations = [];
     
     // Add all manufacturer/model combinations
@@ -78,16 +80,16 @@ class PrismCrealityCard extends HTMLElement {
       }
     }
     
-    // Also add integration-based filters (catches devices by integration name)
-    printerFilterCombinations.push({ integration: 'creality_control' });
-    printerFilterCombinations.push({ integration: 'moonraker' });
-    printerFilterCombinations.push({ integration: 'klipper' });
+    // Integration-based filters (catches devices by integration name)
+    printerFilterCombinations.push({ integration: 'ha_creality_ws' });  // Creality WebSocket
+    printerFilterCombinations.push({ integration: 'moonraker' });       // Moonraker (rooted)
+    printerFilterCombinations.push({ integration: 'klipper' });         // Klipper
 
     return {
       schema: [
         {
           name: 'printer',
-          label: 'Printer Device (Creality Control or Moonraker)',
+          label: 'Printer Device (ha_creality_ws or Moonraker)',
           required: true,
           selector: { device: { filter: printerFilterCombinations } }
         },
@@ -209,6 +211,32 @@ class PrismCrealityCard extends HTMLElement {
             }
           ]
         },
+        // CFS (Creality Filament System) section
+        {
+          type: 'expandable',
+          name: '',
+          title: 'CFS (Creality Filament System)',
+          schema: [
+            {
+              name: 'show_cfs',
+              label: 'Show CFS filament slots (auto-detected from ha_creality_ws)',
+              default: true,
+              selector: { boolean: {} }
+            },
+            {
+              name: 'show_cfs_info',
+              label: 'Show CFS Temperature & Humidity',
+              default: true,
+              selector: { boolean: {} }
+            },
+            {
+              name: 'show_external_spool',
+              label: 'Show External Spool (if available)',
+              default: true,
+              selector: { boolean: {} }
+            }
+          ]
+        },
         // Multi-Printer View section
         {
           type: 'expandable',
@@ -279,7 +307,7 @@ class PrismCrealityCard extends HTMLElement {
     const result = {};
     
     // Support multiple platforms
-    const supportedPlatforms = ['creality_control', 'moonraker', 'klipper'];
+    const supportedPlatforms = ['ha_creality_ws', 'moonraker', 'klipper'];
     
     // First try: Loop through all hass entities and find those belonging to our device
     for (const entityId in this._hass.entities) {
@@ -441,8 +469,8 @@ class PrismCrealityCard extends HTMLElement {
     if (!this._hass || !deviceId) return {};
     
     const result = {};
-    // Support both Creality Control and Moonraker platforms
-    const supportedPlatforms = ['creality_control', 'moonraker', 'klipper'];
+    // Support ha_creality_ws and Moonraker platforms
+    const supportedPlatforms = ['ha_creality_ws', 'moonraker', 'klipper'];
     
     // First try: Find by device_id in entities registry
     for (const entityId in this._hass.entities) {
@@ -579,12 +607,12 @@ class PrismCrealityCard extends HTMLElement {
     };
     
     // Get print status
-    // Creality Control: devicestate, print_state
+    // Status entity patterns (ha_creality_ws + Moonraker)
     // Moonraker HA: current_print_state, printer_state, status
     let stateStr = 'Idle';
     const stateEntity = findEntityMultiPattern([
-      'devicestate', 'current_print_state', 'print_status', 'print_state', 
-      'printer_state', 'status', '_state'
+      'print_status',           // ha_creality_ws (priority)
+      'current_print_state', 'printer_state', 'status', '_state'  // Moonraker
     ]);
     
     if (stateEntity) {
@@ -615,7 +643,8 @@ class PrismCrealityCard extends HTMLElement {
     // Moonraker: print_progress, progress_percentage
     let progress = 0;
     const progressEntity = findEntityMultiPattern([
-      'printprogress', 'print_progress', 'progress_percentage', 'progress'
+      'print_progress',         // ha_creality_ws (priority)
+      'progress_percentage', 'progress'  // Moonraker
     ]);
     if (progressEntity) {
       progress = parseFloat(this._hass.states[progressEntity]?.state) || 0;
@@ -650,13 +679,19 @@ class PrismCrealityCard extends HTMLElement {
     // Moonraker HA: slicer_print_time_left_estimate, print_time_left, time_remaining, eta (may be in seconds)
     let printTimeLeft = '--';
     const timeEntity = findEntityMultiPattern([
-      'printlefttime', 'slicer_print_time_left', 'print_time_left', 'time_remaining', 'lefttime', 'eta', 'print_eta', 'remaining'
+      'print_left_time',        // ha_creality_ws (priority) - returns SECONDS
+      'slicer_print_time_left', 'print_time_left', 'time_remaining', 'eta', 'print_eta', 'remaining'  // Moonraker
     ]);
     if (timeEntity && (isPrinting || isPaused)) {
       let timeValue = parseFloat(this._hass.states[timeEntity]?.state) || 0;
-      // If value > 1000, assume it's in seconds (Moonraker), convert to minutes
-      if (timeValue > 1000) {
-        timeValue = timeValue / 60;
+      // ha_creality_ws returns time in SECONDS
+      // Moonraker may return hours (small values like 2.5) or seconds (large values)
+      // If value > 300 (5 minutes), assume it's in seconds and convert to minutes
+      if (timeValue > 300) {
+        timeValue = timeValue / 60;  // Convert seconds to minutes
+      } else if (timeValue < 10 && timeValue > 0) {
+        // Small value likely in hours (Moonraker), convert to minutes
+        timeValue = timeValue * 60;
       }
       if (timeValue > 0) {
         const hours = Math.floor(timeValue / 60);
@@ -671,8 +706,8 @@ class PrismCrealityCard extends HTMLElement {
     let currentLayer = 0;
     let totalLayers = 0;
     if (isPrinting || isPaused) {
-      const layerEntity = findEntityMultiPattern(['current_layer', '_layer', 'layer']);
-      const totalLayerEntity = findEntityMultiPattern(['total_layer', 'totallayer', 'total_layers']);
+      const layerEntity = findEntityMultiPattern(['current_layer', 'layer']);  // ha_creality_ws: current_layer
+      const totalLayerEntity = findEntityMultiPattern(['total_layers', 'total_layer']);  // ha_creality_ws: total_layers
       if (layerEntity) currentLayer = parseInt(this._hass.states[layerEntity]?.state) || 0;
       if (totalLayerEntity) totalLayers = parseInt(this._hass.states[totalLayerEntity]?.state) || 0;
     }
@@ -683,7 +718,8 @@ class PrismCrealityCard extends HTMLElement {
     let nozzleTemp = 0, targetNozzleTemp = 0, bedTemp = 0, targetBedTemp = 0, chamberTemp = 0;
     
     const nozzleTempEntity = findEntityMultiPattern([
-      'nozzletemp', 'extruder_temperature', 'extruder_temp', 'hotend_temp', 'nozzle_temp'
+      'nozzle_temperature',     // ha_creality_ws (priority)
+      'extruder_temperature', 'extruder_temp', 'hotend_temp'  // Moonraker
     ]);
     // Target nozzle can be sensor OR number domain in Moonraker HA
     let targetNozzleEntity = findEntityMultiPattern([
@@ -695,7 +731,8 @@ class PrismCrealityCard extends HTMLElement {
       ], 'number');
     }
     const bedTempEntity = findEntityMultiPattern([
-      'bedtemp', 'heater_bed_temperature', 'bed_temp', 'bed_temperature', 'heated_bed'
+      'bed_temperature',        // ha_creality_ws (priority)
+      'heater_bed_temperature', 'bed_temp', 'heated_bed'  // Moonraker
     ]);
     // Target bed can be sensor OR number domain in Moonraker HA
     let targetBedEntity = findEntityMultiPattern([
@@ -707,7 +744,8 @@ class PrismCrealityCard extends HTMLElement {
       ], 'number');
     }
     const boxTempEntity = findEntityMultiPattern([
-      'boxtemp', 'chamber_temp', 'chamber_temperature', 'enclosure_temp'
+      'box_temperature',        // ha_creality_ws (priority)
+      'chamber_temp', 'chamber_temperature', 'enclosure_temp'  // Moonraker
     ]);
     
     if (nozzleTempEntity) nozzleTemp = parseFloat(this._hass.states[nozzleTempEntity]?.state) || 0;
@@ -1114,6 +1152,73 @@ class PrismCrealityCard extends HTMLElement {
         this.handlePowerToggle();
       };
     }
+    
+    // CFS filament slot click handlers
+    const cfsSlots = this.shadowRoot?.querySelectorAll('.cfs-slot.clickable');
+    if (cfsSlots) {
+      cfsSlots.forEach(slot => {
+        addTapListener(slot, () => {
+          this.openFilamentPopup(slot);
+        });
+      });
+    }
+    
+    // Filament popup close handlers
+    const popupOverlay = this.shadowRoot?.querySelector('.filament-popup-overlay');
+    const popupClose = this.shadowRoot?.querySelector('.filament-popup-close');
+    
+    if (popupOverlay) {
+      popupOverlay.onclick = (e) => {
+        if (e.target === popupOverlay) {
+          this.closeFilamentPopup();
+        }
+      };
+    }
+    if (popupClose) {
+      popupClose.onclick = () => {
+        this.closeFilamentPopup();
+      };
+    }
+  }
+  
+  openFilamentPopup(slotElement) {
+    const overlay = this.shadowRoot?.querySelector('.filament-popup-overlay');
+    if (!overlay) return;
+    
+    // Get data from slot element attributes
+    const fullName = slotElement.dataset.fullName || 'Unknown';
+    const type = slotElement.dataset.type || '';
+    const color = slotElement.dataset.color || '#666666';
+    const remaining = slotElement.dataset.remaining || '?';
+    const filamentType = slotElement.dataset.filamentType || type;
+    const slotId = slotElement.dataset.slotId || '';
+    
+    // Parse slot ID to get box and slot
+    const [boxId, slotNum] = slotId.split('-');
+    const slotDisplay = boxId !== undefined ? `Box ${parseInt(boxId) + 1}, Slot ${parseInt(slotNum) + 1}` : slotId;
+    
+    // Update popup content
+    const colorEl = overlay.querySelector('.filament-popup-color');
+    const nameEl = overlay.querySelector('.filament-popup-name');
+    const typeEl = overlay.querySelector('.filament-popup-type');
+    const remainingEl = overlay.querySelector('.filament-stat-remaining');
+    const slotEl = overlay.querySelector('.filament-stat-slot');
+    
+    if (colorEl) colorEl.style.backgroundColor = color;
+    if (nameEl) nameEl.textContent = fullName;
+    if (typeEl) typeEl.textContent = filamentType || type;
+    if (remainingEl) remainingEl.textContent = remaining >= 0 ? `${remaining}%` : 'Unknown';
+    if (slotEl) slotEl.textContent = slotDisplay;
+    
+    // Show popup
+    overlay.style.display = 'flex';
+  }
+  
+  closeFilamentPopup() {
+    const overlay = this.shadowRoot?.querySelector('.filament-popup-overlay');
+    if (overlay) {
+      overlay.style.display = 'none';
+    }
   }
   
   handlePowerToggle() {
@@ -1153,7 +1258,7 @@ class PrismCrealityCard extends HTMLElement {
     const data = this.getPrinterData();
     let btn = null;
     
-    // First try: Toggle button (Creality Control uses this)
+    // First try: Toggle button (some integrations use this)
     const togglePatterns = ['pause_resume_print', 'pause_resume', 'pauseresume'];
     for (const pattern of togglePatterns) {
       btn = this.findEntityByPatternForDevice(deviceId, pattern, 'button');
@@ -1223,7 +1328,7 @@ class PrismCrealityCard extends HTMLElement {
     if (!this._hass) return;
     const deviceId = this.config?.printer;
     
-    // Creality Control: stop_print, emergency_stop
+    // Stop patterns: stop_print (ha_creality_ws), cancel_print (Moonraker)
     // Moonraker: cancel_print, emergency_stop
     const patterns = ['stop_print', 'cancel_print', 'emergency_stop', 'stop'];
     let stopBtn = null;
@@ -1250,7 +1355,7 @@ class PrismCrealityCard extends HTMLElement {
     if (!this._hass) return;
     const deviceId = this.config?.printer;
     
-    // Creality Control uses: button.home_all_axes
+    // Home button patterns
     const patterns = ['home_all_axes', 'home_all', 'home'];
     let homeBtn = null;
     
@@ -1278,12 +1383,14 @@ class PrismCrealityCard extends HTMLElement {
     // Use configured light_switch or auto-detect
     let entityId = this.config.light_switch;
     
-    // Otherwise find the light entity (switch, light, or number domain)
-    if (!entityId) {
-      entityId = this.findEntityByPattern('light', 'switch');
-    }
+    // Otherwise find the light entity
+    // ha_creality_ws uses light domain (priority)
     if (!entityId) {
       entityId = this.findEntityByPattern('light', 'light');
+    }
+    // Moonraker uses switch domain
+    if (!entityId) {
+      entityId = this.findEntityByPattern('light', 'switch');
     }
     // Moonraker HA uses number domain for LED control
     if (!entityId) {
@@ -3220,7 +3327,7 @@ class PrismCrealityCard extends HTMLElement {
     }
     
     // Find entities by searching entity_ids (Creality uses different naming pattern)
-    // Helper to find entity with multiple pattern options (supports Creality Control + Moonraker)
+    // Helper to find entity with multiple pattern options (ha_creality_ws + Moonraker)
     const findMulti = (patterns, domain = null) => {
       for (const pattern of patterns) {
         const entity = this.findEntityByPattern(pattern, domain);
@@ -3229,7 +3336,7 @@ class PrismCrealityCard extends HTMLElement {
       return null;
     };
     
-    // Status, Progress, Layers - support both Creality Control and Moonraker
+    // Status, Progress, Layers - ha_creality_ws + Moonraker
     // Moonraker HA uses: current_print_state, printer_state, progress, current_layer, total_layer, print_time_left
     const progressEntity = findMulti(['printprogress', 'print_progress', 'progress_percentage', 'progress']);
     const stateEntity = findMulti(['devicestate', 'current_print_state', 'print_status', 'print_state', 'printer_state', 'device_state', 'status']);
@@ -3277,13 +3384,16 @@ class PrismCrealityCard extends HTMLElement {
     }
     
     
-    // Light: prefer switch domain for control, then number (Moonraker), then sensor for status
-    let lightSwitchEntity = findMulti(['lightsw', 'light', 'led'], 'switch');
+    // Light: ha_creality_ws uses light domain (priority), then switch (Moonraker), then number
+    let lightSwitchEntity = findMulti(['light'], 'light');  // ha_creality_ws
+    if (!lightSwitchEntity) {
+      lightSwitchEntity = findMulti(['light', 'led'], 'switch');  // Moonraker switch
+    }
     // Moonraker HA uses number domain for LED control (e.g., number.k1_098d_output_pin_led)
     if (!lightSwitchEntity) {
       lightSwitchEntity = findMulti(['output_pin_led', 'led'], 'number');
     }
-    const lightSensorEntity = findMulti(['lightsw', 'light', 'led'], 'sensor');
+    const lightSensorEntity = findMulti(['light', 'led'], 'sensor');
     
     // Camera: must be camera domain
     const cameraEntityAuto = this.findEntityByPattern('camera', 'camera');
@@ -3291,11 +3401,11 @@ class PrismCrealityCard extends HTMLElement {
     
     // Thumbnail/Cover image: auto-detect from camera or image domain
     let thumbnailEntityAuto = null;
-    // First try camera domain (Moonraker uses camera.xxx_thumbnail)
-    thumbnailEntityAuto = findMulti(['thumbnail', 'cover_image', 'titelbild', 'gcode_preview'], 'camera');
-    // Then try image domain
+    // First try image domain - ha_creality_ws uses current_print_preview (priority)
+    thumbnailEntityAuto = findMulti(['current_print_preview', 'thumbnail', 'cover_image', 'titelbild', 'gcode_preview'], 'image');
+    // Then try camera domain (Moonraker uses camera.xxx_thumbnail)
     if (!thumbnailEntityAuto) {
-      thumbnailEntityAuto = findMulti(['thumbnail', 'cover_image', 'titelbild', 'gcode_preview'], 'image');
+      thumbnailEntityAuto = findMulti(['thumbnail', 'cover_image', 'titelbild', 'gcode_preview'], 'camera');
     }
     
     // Read values
@@ -3526,6 +3636,186 @@ class PrismCrealityCard extends HTMLElement {
       }
     }
     
+    // CFS (Creality Filament System) detection - ha_creality_ws entities
+    let cfsData = [];
+    let cfsTemperature = null;
+    let cfsHumidity = null;
+    let externalSpoolData = null;
+    
+    if (this.config.show_cfs !== false) {
+      const deviceName = device?.name || '';
+      const deviceNameLower = deviceName.toLowerCase().replace(/[^a-z0-9]/g, '_');
+      
+      // Find all CFS entities for this device
+      const cfsBoxes = {};
+      const cfsExternal = {};
+      
+      for (const entityId in this._hass.entities) {
+        const entityInfo = this._hass.entities[entityId];
+        const entityIdLower = entityId.toLowerCase();
+        
+        // Check if entity belongs to our device
+        const belongsToDevice = entityInfo.device_id === deviceId || 
+                               (deviceNameLower && entityIdLower.includes(deviceNameLower));
+        
+        if (!belongsToDevice) continue;
+        
+        // Parse CFS box entities: cfs_box_{box_id}_{type}
+        const boxMatch = entityIdLower.match(/cfs_box_(\d+)_(.+)/);
+        if (boxMatch) {
+          const boxId = parseInt(boxMatch[1]);
+          const fieldType = boxMatch[2];
+          
+          if (!cfsBoxes[boxId]) {
+            cfsBoxes[boxId] = { id: boxId, slots: {} };
+          }
+          
+          // Slot entities: slot_{slot_id}_{type}
+          const slotMatch = fieldType.match(/slot_(\d+)_(.+)/);
+          if (slotMatch) {
+            const slotId = parseInt(slotMatch[1]);
+            const slotField = slotMatch[2];
+            
+            if (!cfsBoxes[boxId].slots[slotId]) {
+              cfsBoxes[boxId].slots[slotId] = { id: slotId, boxId };
+            }
+            cfsBoxes[boxId].slots[slotId][slotField + 'Entity'] = entityId;
+          } else if (fieldType === 'temp') {
+            cfsBoxes[boxId].tempEntity = entityId;
+          } else if (fieldType === 'humidity') {
+            cfsBoxes[boxId].humidityEntity = entityId;
+          }
+        }
+        
+        // Parse external spool entities: cfs_external_{type}
+        const extMatch = entityIdLower.match(/cfs_external_(.+)/);
+        if (extMatch) {
+          const extField = extMatch[1];
+          cfsExternal[extField + 'Entity'] = entityId;
+        }
+      }
+      
+      // Build CFS data array
+      const boxIds = Object.keys(cfsBoxes).map(Number).sort((a, b) => a - b);
+      
+      for (const boxId of boxIds) {
+        const box = cfsBoxes[boxId];
+        
+        // Get box temp/humidity (use first box's values for display)
+        if (box.tempEntity && cfsTemperature === null) {
+          cfsTemperature = parseFloat(this._hass.states[box.tempEntity]?.state) || null;
+        }
+        if (box.humidityEntity && cfsHumidity === null) {
+          cfsHumidity = parseFloat(this._hass.states[box.humidityEntity]?.state) || null;
+        }
+        
+        // Process each slot
+        const slotIds = Object.keys(box.slots).map(Number).sort((a, b) => a - b);
+        
+        for (const slotId of slotIds) {
+          const slot = box.slots[slotId];
+          
+          const filamentState = slot.filamentEntity ? this._hass.states[slot.filamentEntity] : null;
+          const colorState = slot.colorEntity ? this._hass.states[slot.colorEntity] : null;
+          const percentState = slot.percentEntity ? this._hass.states[slot.percentEntity] : null;
+          
+          const filamentName = filamentState?.state || '';
+          const filamentType = filamentState?.attributes?.type || '';
+          const isSelected = filamentState?.attributes?.selected === true || filamentState?.attributes?.selected === 1;
+          
+          // Get color - can be in color entity or as attribute
+          let color = colorState?.state || filamentState?.attributes?.color_hex || '#666666';
+          if (color && !color.startsWith('#') && !color.startsWith('rgb')) {
+            color = '#' + color;
+          }
+          
+          // Check for transparency
+          let isTransparent = false;
+          if (color && color.length === 9) {
+            const alphaHex = color.substring(7, 9);
+            const alphaDecimal = parseInt(alphaHex, 16);
+            if (alphaDecimal < 128) isTransparent = true;
+            color = color.substring(0, 7);
+          }
+          const transparencyKeywords = ['transparent', 'clear', 'translucent'];
+          if (transparencyKeywords.some(kw => filamentName.toLowerCase().includes(kw) || filamentType.toLowerCase().includes(kw))) {
+            isTransparent = true;
+          }
+          
+          const remaining = percentState ? parseFloat(percentState.state) || 0 : -1;
+          
+          const isEmpty = !filamentName || 
+                         filamentName.toLowerCase() === 'unknown' || 
+                         filamentName.toLowerCase() === 'unavailable' ||
+                         filamentName.toLowerCase() === 'empty';
+          
+          // Determine display type
+          let displayType = '';
+          if (!isEmpty) {
+            const typeMatch = `${filamentName} ${filamentType}`.match(/\b(PETG|PLA|ABS|TPU|ASA|PA-CF|PA|PC|PVA|HIPS|PP)\b/i);
+            if (typeMatch) {
+              displayType = typeMatch[1].toUpperCase();
+            } else if (filamentType && filamentType.length <= 8) {
+              displayType = filamentType.toUpperCase();
+            } else if (filamentName && filamentName.length <= 8) {
+              displayType = filamentName.toUpperCase();
+            } else {
+              displayType = filamentName.substring(0, 6).toUpperCase();
+            }
+          }
+          
+          cfsData.push({
+            id: `${boxId}-${slotId}`,
+            boxId,
+            slotId,
+            type: displayType,
+            color: isEmpty ? '#666666' : color,
+            remaining: isEmpty ? 0 : Math.round(remaining),
+            remainEnabled: remaining >= 0,
+            active: isSelected,
+            empty: isEmpty,
+            transparent: isTransparent,
+            fullName: filamentName,
+            filamentType
+          });
+        }
+      }
+      
+      // External spool
+      if (this.config.show_external_spool !== false && Object.keys(cfsExternal).length > 0) {
+        const extFilament = cfsExternal.filamentEntity ? this._hass.states[cfsExternal.filamentEntity] : null;
+        const extColor = cfsExternal.colorEntity ? this._hass.states[cfsExternal.colorEntity] : null;
+        const extPercent = cfsExternal.percentEntity ? this._hass.states[cfsExternal.percentEntity] : null;
+        
+        if (extFilament || extColor || extPercent) {
+          const filamentName = extFilament?.state || '';
+          const filamentType = extFilament?.attributes?.type || '';
+          const isSelected = extFilament?.attributes?.selected === true || extFilament?.attributes?.selected === 1;
+          
+          let color = extColor?.state || extFilament?.attributes?.color_hex || '#666666';
+          if (color && !color.startsWith('#') && !color.startsWith('rgb')) {
+            color = '#' + color;
+          }
+          if (color && color.length === 9) color = color.substring(0, 7);
+          
+          const remaining = extPercent ? parseFloat(extPercent.state) || 0 : -1;
+          const isEmpty = !filamentName || filamentName.toLowerCase() === 'unknown';
+          
+          externalSpoolData = {
+            id: 'external',
+            type: isEmpty ? '' : (filamentType || filamentName.substring(0, 6)).toUpperCase(),
+            color: isEmpty ? '#666666' : color,
+            remaining: isEmpty ? 0 : Math.round(remaining),
+            active: isSelected,
+            empty: isEmpty,
+            transparent: false,
+            fullName: filamentName,
+            filamentType
+          };
+        }
+      }
+    }
+    
     const returnData = {
       stateStr,
       progress: isIdle ? 0 : progress,
@@ -3560,7 +3850,14 @@ class PrismCrealityCard extends HTMLElement {
       customTemp,
       powerSwitch,
       isPowerOn,
-      powerSwitchIcon
+      powerSwitchIcon,
+      // CFS data
+      cfsData,
+      cfsTemperature,
+      cfsHumidity,
+      externalSpoolData,
+      showCfs: this.config.show_cfs !== false && (cfsData.length > 0 || externalSpoolData),
+      showCfsInfo: this.config.show_cfs_info !== false
     };
     
     return returnData;
@@ -3599,7 +3896,19 @@ class PrismCrealityCard extends HTMLElement {
       customTemp: null,
       powerSwitch: null,
       isPowerOn: true,
-      powerSwitchIcon: 'mdi:power'
+      powerSwitchIcon: 'mdi:power',
+      // CFS preview data
+      cfsData: [
+        { id: '0-0', type: 'PLA', color: '#FF6B6B', remaining: 85, active: true, empty: false, transparent: false, fullName: 'Creality PLA Red' },
+        { id: '0-1', type: 'PETG', color: '#4ECDC4', remaining: 62, active: false, empty: false, transparent: false, fullName: 'Creality PETG Teal' },
+        { id: '0-2', type: 'ABS', color: '#FFE66D', remaining: 43, active: false, empty: false, transparent: false, fullName: 'Creality ABS Yellow' },
+        { id: '0-3', type: 'TPU', color: '#95E1D3', remaining: 91, active: false, empty: false, transparent: true, fullName: 'Creality TPU Clear' }
+      ],
+      cfsTemperature: 28,
+      cfsHumidity: 42,
+      externalSpoolData: null,
+      showCfs: true,
+      showCfsInfo: true
     };
   }
 
@@ -4429,6 +4738,259 @@ class PrismCrealityCard extends HTMLElement {
             0%, 100% { opacity: 1; }
             50% { opacity: 0.5; }
         }
+        
+        /* CFS (Creality Filament System) Styles - Same as prism-bambu AMS */
+        .cfs-section {
+            margin-top: 16px;
+            padding-top: 16px;
+            border-top: 1px solid rgba(255, 255, 255, 0.05);
+        }
+        .cfs-grid {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 8px;
+        }
+        .cfs-grid.slots-1 { grid-template-columns: 1fr; max-width: 80px; margin: 0 auto; }
+        .cfs-grid.slots-2 { grid-template-columns: repeat(2, 1fr); max-width: 170px; margin: 0 auto; }
+        .cfs-grid.slots-3 { grid-template-columns: repeat(3, 1fr); max-width: 260px; margin: 0 auto; }
+        
+        .cfs-slot {
+            position: relative;
+            aspect-ratio: 3/4;
+            border-radius: 16px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: space-between;
+            padding: 12px;
+            background-color: rgba(20, 20, 20, 0.8);
+            box-shadow: inset 2px 2px 5px rgba(0,0,0,0.8), inset -1px -1px 2px rgba(255,255,255,0.05);
+            border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+            border-top: 1px solid rgba(0, 0, 0, 0.2);
+            opacity: 0.6;
+            filter: grayscale(0.3);
+            transition: all 0.2s;
+        }
+        .cfs-slot.active {
+            background-color: #1A1A1A;
+            border-bottom: 2px solid #0096FF;
+            border-top: none;
+            box-shadow: 0 0 15px rgba(0, 150, 255, 0.1);
+            opacity: 1;
+            filter: none;
+            transform: scale(1.02);
+            z-index: 10;
+        }
+        .cfs-slot.clickable {
+            cursor: pointer;
+        }
+        .cfs-slot.clickable:hover {
+            transform: scale(1.05);
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.4);
+        }
+        .spool-visual {
+            position: relative;
+            width: 100%;
+            aspect-ratio: 1;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background-color: rgba(0, 0, 0, 0.4);
+            box-shadow: inset 0 2px 4px rgba(0,0,0,0.5);
+        }
+        .filament {
+            width: 70%;
+            height: 70%;
+            border-radius: 50%;
+            position: relative;
+            overflow: hidden;
+            box-shadow: inset 0 2px 4px rgba(0,0,0,0.3);
+        }
+        .cfs-slot.transparent .filament::before {
+            content: '';
+            position: absolute;
+            inset: 0;
+            background-image: 
+                linear-gradient(45deg, rgba(255,255,255,0.15) 25%, transparent 25%),
+                linear-gradient(-45deg, rgba(255,255,255,0.15) 25%, transparent 25%),
+                linear-gradient(45deg, transparent 75%, rgba(255,255,255,0.15) 75%),
+                linear-gradient(-45deg, transparent 75%, rgba(255,255,255,0.15) 75%);
+            background-size: 8px 8px;
+            background-position: 0 0, 0 4px, 4px -4px, -4px 0px;
+            z-index: -1;
+            border-radius: 50%;
+        }
+        .spool-center {
+            position: absolute;
+            width: 20%;
+            height: 20%;
+            border-radius: 50%;
+            background-color: #2a2a2a;
+            border: 1px solid rgba(255,255,255,0.1);
+            box-shadow: 0 2px 5px rgba(0,0,0,0.5);
+            z-index: 5;
+        }
+        .remaining-badge {
+            position: absolute;
+            bottom: -4px;
+            background-color: rgba(0, 0, 0, 0.8);
+            font-size: 9px;
+            font-family: monospace;
+            color: white;
+            padding: 2px 6px;
+            border-radius: 999px;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            z-index: 10;
+        }
+        .cfs-info {
+            text-align: center;
+            width: 100%;
+        }
+        .cfs-type {
+            font-size: 10px;
+            font-weight: 700;
+            color: rgba(255, 255, 255, 0.9);
+        }
+        
+        /* CFS Info Bar (Temperature/Humidity) */
+        .cfs-info-bar {
+            display: flex;
+            justify-content: center;
+            gap: 12px;
+            margin-top: 12px;
+        }
+        .cfs-info-pill {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            background: rgba(0, 0, 0, 0.3);
+            padding: 6px 10px;
+            border-radius: 999px;
+            border: 1px solid rgba(255, 255, 255, 0.05);
+        }
+        .cfs-pill-icon {
+            width: 18px;
+            height: 18px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .cfs-pill-icon ha-icon {
+            width: 16px;
+            height: 16px;
+        }
+        .cfs-pill-content {
+            display: flex;
+            flex-direction: column;
+            line-height: 1.1;
+        }
+        .cfs-pill-value {
+            font-size: 11px;
+            font-weight: 700;
+        }
+        .cfs-pill-label {
+            font-size: 8px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            opacity: 0.6;
+        }
+        .cfs-info-pill.temp .cfs-pill-icon ha-icon {
+            color: #fb923c;
+        }
+        .cfs-info-pill.humidity .cfs-pill-icon ha-icon {
+            color: #60a5fa;
+        }
+        
+        /* Filament Popup */
+        .filament-popup-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.7);
+            backdrop-filter: blur(4px);
+            z-index: 1000;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            animation: fadeIn 0.2s ease;
+        }
+        @keyframes fadeIn {
+            from { opacity: 0; }
+            to { opacity: 1; }
+        }
+        .filament-popup {
+            background: linear-gradient(145deg, #1a1a1a, #252525);
+            border-radius: 20px;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+            width: 90%;
+            max-width: 320px;
+            overflow: hidden;
+            animation: slideUp 0.3s ease;
+        }
+        @keyframes slideUp {
+            from { transform: translateY(20px); opacity: 0; }
+            to { transform: translateY(0); opacity: 1; }
+        }
+        .filament-popup-header {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 16px 20px;
+            background: rgba(0, 0, 0, 0.3);
+            border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+        }
+        .filament-popup-color {
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            border: 2px solid rgba(255, 255, 255, 0.2);
+        }
+        .filament-popup-title {
+            flex: 1;
+        }
+        .filament-popup-name {
+            font-weight: 700;
+            font-size: 16px;
+        }
+        .filament-popup-type {
+            font-size: 12px;
+            opacity: 0.6;
+        }
+        .filament-popup-close {
+            background: none;
+            border: none;
+            color: white;
+            cursor: pointer;
+            padding: 4px;
+            opacity: 0.6;
+        }
+        .filament-popup-close:hover {
+            opacity: 1;
+        }
+        .filament-popup-body {
+            padding: 16px 20px;
+        }
+        .filament-popup-stat {
+            display: flex;
+            justify-content: space-between;
+            padding: 8px 0;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+        }
+        .filament-popup-stat:last-child {
+            border-bottom: none;
+        }
+        .filament-popup-stat-label {
+            opacity: 0.6;
+            font-size: 13px;
+        }
+        .filament-popup-stat-value {
+            font-weight: 600;
+            font-size: 13px;
+        }
       </style>
       
       <div class="card">
@@ -4589,6 +5151,54 @@ class PrismCrealityCard extends HTMLElement {
             <div class="progress-text">${Math.round(data.progress)}%</div>
         </div>
 
+        ${data.showCfs && data.cfsData.length > 0 ? `
+        <div class="cfs-section">
+            <div class="cfs-grid ${data.cfsData.length <= 3 ? 'slots-' + data.cfsData.length : ''}">
+                ${data.cfsData.map(slot => `
+                    <div class="cfs-slot ${slot.active ? 'active' : ''} ${!slot.empty ? 'clickable' : ''} ${slot.transparent ? 'transparent' : ''}"
+                         ${!slot.empty ? `data-slot-id="${slot.id}"
+                         data-full-name="${(slot.fullName || '').replace(/"/g, '&quot;')}"
+                         data-type="${slot.type}"
+                         data-color="${slot.color}"
+                         data-remaining="${slot.remaining}"
+                         data-filament-type="${slot.filamentType || ''}"` : ''}>
+                        <div class="spool-visual">
+                            <div class="filament" style="background-color: ${slot.color};"></div>
+                            <div class="spool-center"></div>
+                            ${!slot.empty && slot.remaining >= 0 ? `<div class="remaining-badge">${slot.remaining}%</div>` : ''}
+                        </div>
+                        <div class="cfs-info">
+                            <div class="cfs-type">${slot.empty ? 'Empty' : slot.type}</div>
+                        </div>
+                    </div>
+                `).join('')}
+            </div>
+            
+            ${data.showCfsInfo && (data.cfsTemperature !== null || data.cfsHumidity !== null) ? `
+            <div class="cfs-info-bar">
+                ${data.cfsTemperature !== null ? `
+                <div class="cfs-info-pill temp">
+                    <div class="cfs-pill-icon"><ha-icon icon="mdi:thermometer"></ha-icon></div>
+                    <div class="cfs-pill-content">
+                        <span class="cfs-pill-value">${Math.round(data.cfsTemperature)}°C</span>
+                        <span class="cfs-pill-label">CFS</span>
+                    </div>
+                </div>
+                ` : ''}
+                ${data.cfsHumidity !== null ? `
+                <div class="cfs-info-pill humidity">
+                    <div class="cfs-pill-icon"><ha-icon icon="mdi:water-percent"></ha-icon></div>
+                    <div class="cfs-pill-content">
+                        <span class="cfs-pill-value">${Math.round(data.cfsHumidity)}%</span>
+                        <span class="cfs-pill-label">CFS</span>
+                    </div>
+                </div>
+                ` : ''}
+            </div>
+            ` : ''}
+        </div>
+        ` : ''}
+
         <div class="controls">
             <button class="btn btn-secondary btn-home" ${data.isIdle ? '' : 'disabled'} title="Home All Axes">
                 <ha-icon icon="mdi:home"></ha-icon>
@@ -4602,6 +5212,32 @@ class PrismCrealityCard extends HTMLElement {
             </button>
         </div>
 
+      </div>
+      
+      <!-- Filament Popup (for CFS slots) -->
+      <div class="filament-popup-overlay" style="display: none;">
+        <div class="filament-popup">
+          <div class="filament-popup-header">
+            <div class="filament-popup-color"></div>
+            <div class="filament-popup-title">
+              <div class="filament-popup-name">Filament</div>
+              <div class="filament-popup-type">Type</div>
+            </div>
+            <button class="filament-popup-close">
+              <ha-icon icon="mdi:close"></ha-icon>
+            </button>
+          </div>
+          <div class="filament-popup-body">
+            <div class="filament-popup-stat">
+              <span class="filament-popup-stat-label">Remaining</span>
+              <span class="filament-popup-stat-value filament-stat-remaining">?%</span>
+            </div>
+            <div class="filament-popup-stat">
+              <span class="filament-popup-stat-label">Position</span>
+              <span class="filament-popup-stat-value filament-stat-slot">--</span>
+            </div>
+          </div>
+        </div>
       </div>
     `;
 
@@ -4620,6 +5256,6 @@ window.customCards.push({
   type: 'prism-creality',
   name: 'Prism Creality',
   preview: true,
-  description: 'Creality 3D Printer card for K1, K1C, K1 Max, K1 SE and more'
+  description: 'Creality 3D Printer card for K1, K1C, K2, Ender 3 V3 (ha_creality_ws + Moonraker)'
 });
 

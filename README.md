@@ -78,6 +78,14 @@ Prism is optimized for wall tablets and smartphones and is ideal as a central sm
 - **📱 Responsive Grid**  
   Layout seamlessly adapts to different devices (tablet on the wall, smartphone in hand).
 
+- **🖨️ Advanced 3D Printer Support**  
+  Full-featured cards for Bambu Lab, Creality, and generic Klipper/Moonraker printers with:
+  - AMS/CFS filament system visualization
+  - 3D model preview (cover image)
+  - Multi-printer camera view
+  - Real-time temperature, progress, layer info
+  - Pause/Resume/Stop controls
+
 - **🧹 Clean Code with YAML Anchors**  
   Uses YAML anchors (`&` and `*`) to avoid repetition and keep global style changes centralized.
 
@@ -184,7 +192,7 @@ Prism-Dashboard/
 
 ## Available Custom Cards
 
-Prism Dashboard includes **29 custom cards** (including dark and light theme variants):
+Prism Dashboard includes **29+ custom cards** (including dark and light theme variants):
 
 ### Room & Navigation
 - **prism-room** – Compact room overview with grouped entities and popup
@@ -211,12 +219,16 @@ Prism Dashboard includes **29 custom cards** (including dark and light theme var
 - **prism-vacuum** / **prism-vacuum-light** – Vacuum robot card
 - **prism-vacuum-switchbot** – Specialized card for SwitchBot vacuums
 
-### Energy & 3D Printing
+### Energy
 - **prism-energy** – Energy flow visualization with animations
 - **prism-energy-horizontal** – Horizontal energy flow layout
-- **prism-3dprinter** – Generic 3D printer card
-- **prism-bambu** – Bambu Lab printer with AMS support
-- **prism-creality** – Creality printer (K1, K1 Max, K1 SE, etc.) - also supports Moonraker/Klipper
+
+### 3D Printing
+- **prism-3dprinter** – Generic 3D printer card for **Moonraker/Klipper** (Voron, Prusa, RatRig, etc.)
+- **prism-bambu** – Bambu Lab printer with **AMS support**, cover image, multi-printer view
+- **prism-creality** – Creality printer with **CFS support** (same design as AMS), cover image, multi-printer view
+  - Supports: K1, K1C, K1 Max, K1 SE, K2, K2 Plus, Ender 3 V3 series
+  - Integrations: [ha_creality_ws](https://github.com/3dg1luk43/ha_creality_ws) (recommended) or Moonraker
 
 ### Dashboard Layout
 - **prism-sidebar** / **prism-sidebar-light** – Full sidebar with camera, weather, calendar

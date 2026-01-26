@@ -283,18 +283,35 @@ An LED light card with interactive color wheel, white temperature control, and b
 
 ### prism-3dprinter
 
-A 3D printer card with glassmorphism design for displaying progress, temperatures, fans, and layer info.
+A 3D printer card for **Moonraker/Klipper** printers (Voron, Prusa, RatRig, Ender, etc.) with glassmorphism design.
 
 <img width="400" alt="prism-3dprinter" src="images/prism-3dprinter.png" />
+
+**For Creality printers:** Use `prism-creality` instead (supports ha_creality_ws + CFS).
+
+**Features:**
+- ✅ **Device Selector**: Select your Moonraker/Klipper printer device
+- ✅ **Auto-Entity Detection**: Automatic detection of all relevant entities
+- ✅ **Camera Support**: Live camera feed with popup
+- ✅ **Multi-Printer View**: Show up to 4 printers in camera popup
+- ✅ **Cover Image**: 3D model preview with build-up effect
+- ✅ **Temperature Display**: Nozzle, Bed, Chamber with targets
+- ✅ **Progress & Layer Info**: Real-time print progress
+- ✅ **Controls**: Pause/Resume, Stop, Home buttons
+- ✅ **Light Control**: Toggle printer light
 
 **Usage:**
 ```yaml
 - type: custom:prism-3dprinter
-  entity: sensor.3d_printer_state        # Sensor/Entity with printer status & attributes
-  name: 3D Printer
-  camera_entity: camera.3d_printer       # Optional: Printer camera
-  image: /hacsfiles/Prism-Dashboard/images/printer-blank.jpg  # Optional, default is automatically used
+  printer: <device_id>          # Moonraker/Klipper printer device
+  name: Voron 2.4
+  camera_entity: camera.printer_webcam  # Optional
+  image: /hacsfiles/Prism-Dashboard/images/printer-blank.jpg  # Optional
 ```
+
+**Supported Integrations:**
+- [Moonraker Home Assistant](https://github.com/marcolivierarsenault/moonraker-home-assistant)
+- Native Klipper integration
 
 ---
 
@@ -468,94 +485,106 @@ The card is compatible with the [ha-bambulab Integration](https://github.com/gre
 
 ### prism-creality
 
-A Creality 3D printer card with glassmorphism design and full display of print progress, temperatures, fans, layer info. Supports K1, K1C, K1 Max, K1 SE and other Creality printers. Also works with Moonraker/Klipper for rooted printers.
+A Creality 3D printer card with **CFS (Creality Filament System)** support, glassmorphism design, and full feature parity with prism-bambu. Supports K1, K1C, K1 Max, K1 SE, K2, K2 Plus, Ender 3 V3 series.
 
 <img width="400" alt="prism-creality" src="images/prism-creality.jpg" />
+
+**Supported Integrations:**
+- **[ha_creality_ws](https://github.com/3dg1luk43/ha_creality_ws)** - WebSocket integration (recommended) with CFS support
+- **[Moonraker](https://github.com/marcolivierarsenault/moonraker-home-assistant)** - For rooted printers with Klipper
 
 **Usage:**
 
 **Basic Configuration (Visual Editor):**
 ```yaml
 - type: custom:prism-creality
-  printer: <device_id>  # Creality printer device (e.g., from Device Registry)
-  name: Creality Printer  # Optional: Custom Name
-  image: /hacsfiles/Prism-Dashboard/images/printer-blank.jpg  # Optional: Printer image (default is automatically used)
+  printer: <device_id>  # Creality printer device
+  name: Creality K1
 ```
 
-**Advanced Configuration (with Camera and Light):**
+**Advanced Configuration:**
 ```yaml
 - type: custom:prism-creality
-  printer: <device_id>  # Creality printer device
+  printer: <device_id>
   name: Creality K1 SE
-  camera_entity: camera.creality_k1_se_camera  # Optional: Camera Entity
-  light_switch: switch.creality_light  # Optional: Light Switch Entity
-  image: /local/custom-components/images/prism-creality.webp  # Optional: .webp, .png or .jpg
+  camera_entity: camera.k1_se_camera
+  light_switch: light.k1_se_light  # ha_creality_ws uses light domain
+  show_cover_image: true
+  show_cfs: true           # CFS filament display
+  show_cfs_info: true      # CFS temperature & humidity
+  show_external_spool: true
 ```
 
-**Note:** The card uses Home Assistant's **Device Registry** and automatically filters all relevant entities based on the selected printer device. This works with the [Creality-Control Integration](https://github.com/SiloCityLabs/Creality-Control) and additionally supports [Moonraker](https://github.com/marcolivierarsenault/moonraker-home-assistant) for rooted printers.
-
 **Features:**
-- ✅ **Auto-Entity Detection**: Automatic detection of Light Switch and Camera entities
-- ✅ **Live Camera Stream**: Toggle between printer image and live video stream
-- ✅ **Camera Popup**: Click on camera opens large More-Info window
-- ✅ **Light Control**: Light button to turn printer lighting on/off
-- ✅ **Dynamic Image**: Printer image is darkened when light is off
-- ✅ **Interactive Buttons**: Pause/Resume, Stop, Home All Axes with correct state logic
-- ✅ **Temperature Overlays**: Nozzle, Bed, Box/Chamber with target temperatures
-- ✅ **Fan Speeds**: Model Fan, Auxiliary Fan, Case Fan display
-- ✅ **Layer Information**: Current Layer / Total Layers
-- ✅ **Progress Bar**: Visual progress bar with percentage
-- ✅ **Status Indicator**: Colored dot (green=pulsing when printing, yellow=paused, gray=idle)
-- ✅ **Power Switch**: Optional power button (green=on, gray/red=off)
+- ✅ **CFS Support**: Filament slots display (same design as Bambu AMS)
+- ✅ **CFS Temperature & Humidity**: Environmental monitoring
+- ✅ **Cover Image**: 3D model preview with real-time build-up effect
+- ✅ **Multi-Printer Camera View**: Show up to 4 printers simultaneously
+- ✅ **Auto-Entity Detection**: Automatic detection of all entities
+- ✅ **Live Camera Stream**: Toggle between printer image and video
+- ✅ **Camera Popup**: Draggable & resizable popup with multi-printer support
+- ✅ **Light Control**: Toggle printer light (light domain for ha_creality_ws)
+- ✅ **Temperature Overlays**: Nozzle, Bed, Chamber with targets
+- ✅ **Fan Speeds**: Model Fan, Auxiliary Fan, Case Fan
+- ✅ **Progress Bar**: Visual progress with percentage
+- ✅ **Layer Information**: Current / Total layers
+- ✅ **Controls**: Pause/Resume, Stop, Home buttons
+- ✅ **Power Switch**: Optional power button
 
-**Configuration in Visual Editor:**
+**CFS (Creality Filament System):**
 
-1. **Printer Device**: Select your Creality printer device from the device list
-2. **Name** (optional): Custom name for the card
-3. **Camera Entity** (optional): Camera entity for live stream (also auto-detected)
-4. **Light Switch** (optional): Light/Switch entity for lighting (also auto-detected)
-5. **Image** (optional): Path to printer image (`.webp`, `.png` or `.jpg`)
+The card automatically detects CFS entities from ha_creality_ws:
 
-**Automatic Entity Detection:**
+| Entity Pattern | Description |
+|----------------|-------------|
+| `cfs_box_{N}_temp` | Box temperature |
+| `cfs_box_{N}_humidity` | Box humidity |
+| `cfs_box_{N}_slot_{M}_filament` | Filament type (with attributes: type, selected, color_hex) |
+| `cfs_box_{N}_slot_{M}_color` | Filament color |
+| `cfs_box_{N}_slot_{M}_percent` | Remaining percentage |
+| `cfs_external_*` | External spool |
 
-The card automatically detects all relevant entities based on the printer device:
+**CFS Features:**
+- Spool visualization with filament color
+- Remaining percentage badge
+- Active slot highlighting (blue border)
+- Transparent filament detection (checkerboard pattern)
+- Temperature & humidity pills
+- Click slot for detailed popup
 
-- **Print Status**: `print_state` or `device_state` Entity
-- **Temperatures**: `nozzle_temp`, `bed_temp`, `box_temp` with target temperatures
-- **Fans**: `model_fan_pct`, `auxiliary_fan_pct`, `case_fan_pct`
-- **Progress**: `print_progress`, `time_left`, `current_layer`, `total_layer`
-- **Light Switch**: `switch.creality_light` (automatically detected)
-- **Camera**: `camera.creality_*_camera` (automatically detected or can be set manually)
+**ha_creality_ws Entity Mapping:**
+
+| Function | ha_creality_ws | Moonraker |
+|----------|----------------|-----------|
+| Status | `print_status` | `current_print_state` |
+| Nozzle Temp | `nozzle_temperature` | `extruder_temperature` |
+| Bed Temp | `bed_temperature` | `heater_bed_temperature` |
+| Chamber | `box_temperature` | `chamber_temperature` |
+| Progress | `print_progress` | `progress` |
+| Time Left | `print_left_time` (seconds!) | `slicer_print_time_left` |
+| Layer | `current_layer`, `total_layers` | `current_layer`, `total_layer` |
+| Light | `light.xxx_light` | `switch.xxx_light` |
+| Controls | `pause_print`, `resume_print`, `stop_print` | same |
+| Cover Image | `image.current_print_preview` | `camera.xxx_thumbnail` |
 
 **Supported Printer Models:**
 
-- ✅ **K1, K1C, K1 Max, K1 SE** (FDM printers)
-- ✅ **K2 Plus, K2 Pro** (FDM printers)
-- ✅ **Halot Series** (Resin printers)
-- ✅ Other Creality printers with WebSocket support
-
-**Creality-Control Integration:**
-The card is compatible with the [Creality-Control Integration](https://github.com/SiloCityLabs/Creality-Control) and uses all available sensors, switches, buttons, and camera entities.
-
-**Moonraker Support (Additional):**
-For rooted Creality printers running Klipper/Moonraker, the card also supports the [Moonraker Home Assistant Integration](https://github.com/marcolivierarsenault/moonraker-home-assistant). The card automatically detects entities based on your **device name** in Home Assistant (e.g., device "K1-098D" → finds entities like `sensor.k1_098d_bed_temperature`).
-
-**Images:**
-- The default printer image (`printer-blank.jpg`) is automatically installed with HACS
-- Default path: `/hacsfiles/Prism-Dashboard/images/printer-blank.jpg`
-- You can specify a custom image path in the `image` field if needed
-- The card supports `.webp`, `.png` and `.jpg` formats
-- As a last fallback, a printer icon is displayed
+- ✅ **K1, K1C, K1 Max, K1 SE** (FDM)
+- ✅ **K2, K2 Plus, K2 Pro** (FDM)
+- ✅ **Ender 3 V3, V3 KE, V3 Plus** (FDM)
+- ✅ **Creality Hi**
+- ✅ Rooted Creality printers with Moonraker
 
 **Interactions:**
 
-- **Light Button**: Toggle Light on/off (button shows immediate feedback)
-- **Camera Button**: Switches between printer image and live camera stream
-- **Click Camera Image**: Opens large More-Info popup (like HA image entities)
-- **Pause Button**: Pause/Resume Print (only active when printer is printing/paused)
-- **Stop Button**: Stop Print (only active when printer is printing/paused)
-- **Home Button**: Home All Axes (only active when printer is idle)
-- **Power Button**: Toggle Power Switch (if configured)
+- **Light Button**: Toggle light on/off
+- **Camera Button**: Toggle camera view
+- **Click Camera**: Opens multi-printer popup
+- **Click CFS Slot**: Opens filament details popup
+- **Pause Button**: Pause/Resume print
+- **Stop Button**: Stop print
+- **Home Button**: Home all axes (idle only)
+- **Power Button**: Toggle power switch (if configured)
 
 ---
 
