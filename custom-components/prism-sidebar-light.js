@@ -476,30 +476,71 @@ class PrismSidebarLightCard extends HTMLElement {
         setTimeout(checkAndInject, 100);
     }
     
-    _createCustomCard() {
+    async _createCustomCard() {
         if (!this.customCardConfig) return null;
         
-        let cardType = this.customCardConfig.type;
-        if (!cardType) return null;
-        
-        // Strip 'custom:' prefix if present (HA uses this in YAML but element name doesn't have it)
-        if (cardType.startsWith('custom:')) {
-            cardType = cardType.substring(7);
-        }
-        
         try {
-            // Create the custom element
-            const element = document.createElement(cardType);
-            if (element.setConfig) {
-                element.setConfig(this.customCardConfig);
+            // Method 1: Try using HA's official card helpers (preferred)
+            let helpers = null;
+            try {
+                helpers = await window.loadCardHelpers?.();
+            } catch (e) {
+                console.debug('Prism Sidebar Light: Could not load card helpers', e);
             }
-            if (this._hass && element.hass !== undefined) {
+            
+            let element = null;
+            
+            if (helpers?.createCardElement) {
+                // Use official HA card helpers - same as prism-button popups
+                element = await helpers.createCardElement(this.customCardConfig);
+            } else {
+                // Fallback: direct element creation
+                let cardType = this.customCardConfig.type;
+                if (!cardType) return null;
+                
+                // Strip 'custom:' prefix if present (HA uses this in YAML but element name doesn't have it)
+                if (cardType.startsWith('custom:')) {
+                    cardType = cardType.substring(7);
+                }
+                
+                // Wait for custom element to be defined (if it's a custom card)
+                if (!customElements.get(cardType)) {
+                    // Give it a moment to load
+                    await new Promise(resolve => setTimeout(resolve, 100));
+                }
+                
+                element = document.createElement(cardType);
+                if (element.setConfig) {
+                    element.setConfig(this.customCardConfig);
+                }
+            }
+            
+            if (element && this._hass) {
                 element.hass = this._hass;
             }
             return element;
         } catch (error) {
-            console.error('Error creating custom card:', error);
+            console.error('Prism Sidebar Light: Error creating custom card:', error);
             return null;
+        }
+    }
+    
+    async _insertCustomCard() {
+        if (!this.customCardConfig) return;
+        
+        const slot = this.shadowRoot?.getElementById('custom-card-slot');
+        if (!slot) return;
+        
+        // Show loading state
+        slot.innerHTML = '<div style="padding: 20px; color: rgba(0,0,0,0.4); text-align: center; font-size: 12px;">Loading...</div>';
+        
+        const card = await this._createCustomCard();
+        if (card) {
+            slot.innerHTML = '';
+            this._customCardElement = card;
+            slot.appendChild(card);
+        } else {
+            slot.innerHTML = '<div style="padding: 20px; color: rgba(0,0,0,0.3); text-align: center; font-size: 12px;">Could not load card</div>';
         }
     }
 
@@ -1994,18 +2035,9 @@ class PrismSidebarLightCard extends HTMLElement {
         // Setup event listeners
         this.setupListeners();
         
-        // Insert custom card if configured
+        // Insert custom card if configured (async - uses card helpers)
         if (this.customCardConfig) {
-            const slot = this.shadowRoot.getElementById('custom-card-slot');
-            if (slot) {
-                // Clear previous card
-                slot.innerHTML = '';
-                const card = this._createCustomCard();
-                if (card) {
-                    this._customCardElement = card;
-                    slot.appendChild(card);
-                }
-            }
+            this._insertCustomCard();
         }
     }
 

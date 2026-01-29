@@ -165,27 +165,34 @@ class PrismCalendarCard extends HTMLElement {
         calendars.push({ entity: this.config.entity_3, color: this.config.color_3 });
       }
       
-      // Fetch events from all calendars in parallel
-      const authToken = this._hass.auth.data.access_token || this._hass.auth.accessToken;
-      
+      // Fetch events from all calendars in parallel using HA's built-in methods
       const fetchPromises = calendars.map(async (cal) => {
         try {
-          const response = await fetch(
-            `/api/calendars/${cal.entity}?start=${encodeURIComponent(startDate)}&end=${encodeURIComponent(endDate)}`,
-            {
-              headers: {
-                'Authorization': `Bearer ${authToken}`,
-                'Content-Type': 'application/json'
-              }
+          let eventsArray = [];
+          
+          // Method 1: Try callApi (REST API with automatic auth)
+          try {
+            eventsArray = await this._hass.callApi(
+              'GET',
+              `calendars/${cal.entity}?start=${encodeURIComponent(startDate)}&end=${encodeURIComponent(endDate)}`
+            );
+          } catch (apiError) {
+            console.debug(`Prism Calendar: callApi failed for ${cal.entity}, trying WebSocket...`, apiError);
+            
+            // Method 2: Fallback to WebSocket
+            try {
+              const wsResult = await this._hass.callWS({
+                type: 'calendar/events',
+                entity_id: cal.entity,
+                start_date_time: startDate,
+                end_date_time: endDate
+              });
+              eventsArray = wsResult?.events || wsResult || [];
+            } catch (wsError) {
+              console.warn(`Prism Calendar: WebSocket also failed for ${cal.entity}:`, wsError);
+              return [];
             }
-          );
-          
-          if (!response.ok) {
-            console.warn(`Prism Calendar: Failed to fetch ${cal.entity}: HTTP ${response.status}`);
-            return [];
           }
-          
-          const eventsArray = await response.json();
           
           if (Array.isArray(eventsArray) && eventsArray.length > 0) {
             return eventsArray.map(event => {
@@ -225,8 +232,9 @@ class PrismCalendarCard extends HTMLElement {
         })
         .slice(0, this.config.max_events || 5);
       
-      // Fallback to entity attributes if no events found
+      // Fallback to entity attributes if no events found via API
       if (this._events.length === 0 && this.config.entity_1) {
+        console.debug('Prism Calendar: No events from API, trying entity attributes fallback...');
         const entity = this._hass.states[this.config.entity_1];
         if (entity && entity.attributes) {
           const attr = entity.attributes;
@@ -238,6 +246,7 @@ class PrismCalendarCard extends HTMLElement {
               calendarEntity: this.config.entity_1,
               calendarColor: this.config.color_1
             }];
+            console.debug('Prism Calendar: Using entity attribute fallback (1 event)');
           }
         }
       }

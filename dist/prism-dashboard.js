@@ -3,7 +3,7 @@
  * https://github.com/BangerTech/Prism-Dashboard
  * 
  * Version: 1.5.9
- * Build Date: 2026-01-29T10:58:08.608Z
+ * Build Date: 2026-01-29T12:11:14.093Z
  * 
  * This file contains all Prism custom cards bundled together.
  * Just add this single file as a resource in Lovelace:
@@ -7368,27 +7368,34 @@ class PrismCalendarCard extends HTMLElement {
         calendars.push({ entity: this.config.entity_3, color: this.config.color_3 });
       }
       
-      // Fetch events from all calendars in parallel
-      const authToken = this._hass.auth.data.access_token || this._hass.auth.accessToken;
-      
+      // Fetch events from all calendars in parallel using HA's built-in methods
       const fetchPromises = calendars.map(async (cal) => {
         try {
-          const response = await fetch(
-            `/api/calendars/${cal.entity}?start=${encodeURIComponent(startDate)}&end=${encodeURIComponent(endDate)}`,
-            {
-              headers: {
-                'Authorization': `Bearer ${authToken}`,
-                'Content-Type': 'application/json'
-              }
+          let eventsArray = [];
+          
+          // Method 1: Try callApi (REST API with automatic auth)
+          try {
+            eventsArray = await this._hass.callApi(
+              'GET',
+              `calendars/${cal.entity}?start=${encodeURIComponent(startDate)}&end=${encodeURIComponent(endDate)}`
+            );
+          } catch (apiError) {
+            console.debug(`Prism Calendar: callApi failed for ${cal.entity}, trying WebSocket...`, apiError);
+            
+            // Method 2: Fallback to WebSocket
+            try {
+              const wsResult = await this._hass.callWS({
+                type: 'calendar/events',
+                entity_id: cal.entity,
+                start_date_time: startDate,
+                end_date_time: endDate
+              });
+              eventsArray = wsResult?.events || wsResult || [];
+            } catch (wsError) {
+              console.warn(`Prism Calendar: WebSocket also failed for ${cal.entity}:`, wsError);
+              return [];
             }
-          );
-          
-          if (!response.ok) {
-            console.warn(`Prism Calendar: Failed to fetch ${cal.entity}: HTTP ${response.status}`);
-            return [];
           }
-          
-          const eventsArray = await response.json();
           
           if (Array.isArray(eventsArray) && eventsArray.length > 0) {
             return eventsArray.map(event => {
@@ -7428,8 +7435,9 @@ class PrismCalendarCard extends HTMLElement {
         })
         .slice(0, this.config.max_events || 5);
       
-      // Fallback to entity attributes if no events found
+      // Fallback to entity attributes if no events found via API
       if (this._events.length === 0 && this.config.entity_1) {
+        console.debug('Prism Calendar: No events from API, trying entity attributes fallback...');
         const entity = this._hass.states[this.config.entity_1];
         if (entity && entity.attributes) {
           const attr = entity.attributes;
@@ -7441,6 +7449,7 @@ class PrismCalendarCard extends HTMLElement {
               calendarEntity: this.config.entity_1,
               calendarColor: this.config.color_1
             }];
+            console.debug('Prism Calendar: Using entity attribute fallback (1 event)');
           }
         }
       }
@@ -7897,27 +7906,34 @@ class PrismCalendarLightCard extends HTMLElement {
         calendars.push({ entity: this.config.entity_3, color: this.config.color_3 });
       }
       
-      // Fetch events from all calendars in parallel
-      const authToken = this._hass.auth.data.access_token || this._hass.auth.accessToken;
-      
+      // Fetch events from all calendars in parallel using HA's built-in methods
       const fetchPromises = calendars.map(async (cal) => {
         try {
-          const response = await fetch(
-            `/api/calendars/${cal.entity}?start=${encodeURIComponent(startDate)}&end=${encodeURIComponent(endDate)}`,
-            {
-              headers: {
-                'Authorization': `Bearer ${authToken}`,
-                'Content-Type': 'application/json'
-              }
+          let eventsArray = [];
+          
+          // Method 1: Try callApi (REST API with automatic auth)
+          try {
+            eventsArray = await this._hass.callApi(
+              'GET',
+              `calendars/${cal.entity}?start=${encodeURIComponent(startDate)}&end=${encodeURIComponent(endDate)}`
+            );
+          } catch (apiError) {
+            console.debug(`Prism Calendar Light: callApi failed for ${cal.entity}, trying WebSocket...`, apiError);
+            
+            // Method 2: Fallback to WebSocket
+            try {
+              const wsResult = await this._hass.callWS({
+                type: 'calendar/events',
+                entity_id: cal.entity,
+                start_date_time: startDate,
+                end_date_time: endDate
+              });
+              eventsArray = wsResult?.events || wsResult || [];
+            } catch (wsError) {
+              console.warn(`Prism Calendar Light: WebSocket also failed for ${cal.entity}:`, wsError);
+              return [];
             }
-          );
-          
-          if (!response.ok) {
-            console.warn(`Prism Calendar Light: Failed to fetch ${cal.entity}: HTTP ${response.status}`);
-            return [];
           }
-          
-          const eventsArray = await response.json();
           
           if (Array.isArray(eventsArray) && eventsArray.length > 0) {
             return eventsArray.map(event => {
@@ -7957,8 +7973,9 @@ class PrismCalendarLightCard extends HTMLElement {
         })
         .slice(0, this.config.max_events || 5);
       
-      // Fallback to entity attributes if no events found
+      // Fallback to entity attributes if no events found via API
       if (this._events.length === 0 && this.config.entity_1) {
+        console.debug('Prism Calendar Light: No events from API, trying entity attributes fallback...');
         const entity = this._hass.states[this.config.entity_1];
         if (entity && entity.attributes) {
           const attr = entity.attributes;
@@ -7970,6 +7987,7 @@ class PrismCalendarLightCard extends HTMLElement {
               calendarEntity: this.config.entity_1,
               calendarColor: this.config.color_1
             }];
+            console.debug('Prism Calendar Light: Using entity attribute fallback (1 event)');
           }
         }
       }
@@ -15016,30 +15034,71 @@ class PrismSidebarCard extends HTMLElement {
         }
     }
     
-    _createCustomCard() {
+    async _createCustomCard() {
         if (!this.customCardConfig) return null;
         
-        let cardType = this.customCardConfig.type;
-        if (!cardType) return null;
-        
-        // Strip 'custom:' prefix if present (HA uses this in YAML but element name doesn't have it)
-        if (cardType.startsWith('custom:')) {
-            cardType = cardType.substring(7);
-        }
-        
         try {
-            // Create the custom element
-            const element = document.createElement(cardType);
-            if (element.setConfig) {
-                element.setConfig(this.customCardConfig);
+            // Method 1: Try using HA's official card helpers (preferred)
+            let helpers = null;
+            try {
+                helpers = await window.loadCardHelpers?.();
+            } catch (e) {
+                console.debug('Prism Sidebar: Could not load card helpers', e);
             }
-            if (this._hass && element.hass !== undefined) {
+            
+            let element = null;
+            
+            if (helpers?.createCardElement) {
+                // Use official HA card helpers - same as prism-button popups
+                element = await helpers.createCardElement(this.customCardConfig);
+            } else {
+                // Fallback: direct element creation
+                let cardType = this.customCardConfig.type;
+                if (!cardType) return null;
+                
+                // Strip 'custom:' prefix if present (HA uses this in YAML but element name doesn't have it)
+                if (cardType.startsWith('custom:')) {
+                    cardType = cardType.substring(7);
+                }
+                
+                // Wait for custom element to be defined (if it's a custom card)
+                if (!customElements.get(cardType)) {
+                    // Give it a moment to load
+                    await new Promise(resolve => setTimeout(resolve, 100));
+                }
+                
+                element = document.createElement(cardType);
+                if (element.setConfig) {
+                    element.setConfig(this.customCardConfig);
+                }
+            }
+            
+            if (element && this._hass) {
                 element.hass = this._hass;
             }
             return element;
         } catch (error) {
-            console.error('Error creating custom card:', error);
+            console.error('Prism Sidebar: Error creating custom card:', error);
             return null;
+        }
+    }
+    
+    async _insertCustomCard() {
+        if (!this.customCardConfig) return;
+        
+        const slot = this.shadowRoot?.getElementById('custom-card-slot');
+        if (!slot) return;
+        
+        // Show loading state
+        slot.innerHTML = '<div style="padding: 20px; color: rgba(255,255,255,0.5); text-align: center; font-size: 12px;">Loading...</div>';
+        
+        const card = await this._createCustomCard();
+        if (card) {
+            slot.innerHTML = '';
+            this._customCardElement = card;
+            slot.appendChild(card);
+        } else {
+            slot.innerHTML = '<div style="padding: 20px; color: rgba(255,255,255,0.4); text-align: center; font-size: 12px;">Could not load card</div>';
         }
     }
     
@@ -16867,18 +16926,9 @@ class PrismSidebarCard extends HTMLElement {
         // Setup event listeners
         this.setupListeners();
         
-        // Insert custom card if configured
+        // Insert custom card if configured (async - uses card helpers)
         if (this.customCardConfig) {
-            const slot = this.shadowRoot.getElementById('custom-card-slot');
-            if (slot) {
-                // Clear previous card
-                slot.innerHTML = '';
-                const card = this._createCustomCard();
-                if (card) {
-                    this._customCardElement = card;
-                    slot.appendChild(card);
-                }
-            }
+            this._insertCustomCard();
         }
         
         // Mini-graph-card will be inserted in _insertMiniGraphCard() after hass is available
@@ -18481,30 +18531,71 @@ class PrismSidebarLightCard extends HTMLElement {
         setTimeout(checkAndInject, 100);
     }
     
-    _createCustomCard() {
+    async _createCustomCard() {
         if (!this.customCardConfig) return null;
         
-        let cardType = this.customCardConfig.type;
-        if (!cardType) return null;
-        
-        // Strip 'custom:' prefix if present (HA uses this in YAML but element name doesn't have it)
-        if (cardType.startsWith('custom:')) {
-            cardType = cardType.substring(7);
-        }
-        
         try {
-            // Create the custom element
-            const element = document.createElement(cardType);
-            if (element.setConfig) {
-                element.setConfig(this.customCardConfig);
+            // Method 1: Try using HA's official card helpers (preferred)
+            let helpers = null;
+            try {
+                helpers = await window.loadCardHelpers?.();
+            } catch (e) {
+                console.debug('Prism Sidebar Light: Could not load card helpers', e);
             }
-            if (this._hass && element.hass !== undefined) {
+            
+            let element = null;
+            
+            if (helpers?.createCardElement) {
+                // Use official HA card helpers - same as prism-button popups
+                element = await helpers.createCardElement(this.customCardConfig);
+            } else {
+                // Fallback: direct element creation
+                let cardType = this.customCardConfig.type;
+                if (!cardType) return null;
+                
+                // Strip 'custom:' prefix if present (HA uses this in YAML but element name doesn't have it)
+                if (cardType.startsWith('custom:')) {
+                    cardType = cardType.substring(7);
+                }
+                
+                // Wait for custom element to be defined (if it's a custom card)
+                if (!customElements.get(cardType)) {
+                    // Give it a moment to load
+                    await new Promise(resolve => setTimeout(resolve, 100));
+                }
+                
+                element = document.createElement(cardType);
+                if (element.setConfig) {
+                    element.setConfig(this.customCardConfig);
+                }
+            }
+            
+            if (element && this._hass) {
                 element.hass = this._hass;
             }
             return element;
         } catch (error) {
-            console.error('Error creating custom card:', error);
+            console.error('Prism Sidebar Light: Error creating custom card:', error);
             return null;
+        }
+    }
+    
+    async _insertCustomCard() {
+        if (!this.customCardConfig) return;
+        
+        const slot = this.shadowRoot?.getElementById('custom-card-slot');
+        if (!slot) return;
+        
+        // Show loading state
+        slot.innerHTML = '<div style="padding: 20px; color: rgba(0,0,0,0.4); text-align: center; font-size: 12px;">Loading...</div>';
+        
+        const card = await this._createCustomCard();
+        if (card) {
+            slot.innerHTML = '';
+            this._customCardElement = card;
+            slot.appendChild(card);
+        } else {
+            slot.innerHTML = '<div style="padding: 20px; color: rgba(0,0,0,0.3); text-align: center; font-size: 12px;">Could not load card</div>';
         }
     }
 
@@ -19999,18 +20090,9 @@ class PrismSidebarLightCard extends HTMLElement {
         // Setup event listeners
         this.setupListeners();
         
-        // Insert custom card if configured
+        // Insert custom card if configured (async - uses card helpers)
         if (this.customCardConfig) {
-            const slot = this.shadowRoot.getElementById('custom-card-slot');
-            if (slot) {
-                // Clear previous card
-                slot.innerHTML = '';
-                const card = this._createCustomCard();
-                if (card) {
-                    this._customCardElement = card;
-                    slot.appendChild(card);
-                }
-            }
+            this._insertCustomCard();
         }
     }
 
