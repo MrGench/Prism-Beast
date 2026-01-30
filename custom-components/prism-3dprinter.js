@@ -4524,6 +4524,7 @@ class Prism3DPrinterCard extends HTMLElement {
             width: 100%;
             height: 100%;
             object-fit: contain;
+            object-position: center center;
             /* Transparent "ghost" image as background - matching prism-bambu */
             opacity: 0.45;
             filter: drop-shadow(0 4px 8px rgba(0, 0, 0, 0.4)) 
@@ -4550,35 +4551,36 @@ class Prism3DPrinterCard extends HTMLElement {
             width: 100%;
             height: 100%;
             object-fit: contain;
+            object-position: center center;
             /* Clip from bottom to top based on progress
                Added 12% base offset so model starts showing earlier
                (accounts for empty space at bottom of preview images) */
             clip-path: inset(calc(88% - var(--progress-height, 0%)) 0 0 0);
             /* drop-shadow on <img> follows the actual alpha shape of the image! */
-            filter: drop-shadow(0 0 8px rgba(74, 222, 128, 0.6))
-                    drop-shadow(0 0 4px rgba(74, 222, 128, 0.8))
+            filter: drop-shadow(0 0 5px rgba(74, 222, 128, 0.6))
+                    drop-shadow(0 0 3px rgba(74, 222, 128, 0.8))
                     brightness(1.1) contrast(1.15);
             pointer-events: none;
         }
         /* Glow effect when printing - follows the actual model shape! */
         .cover-image-wrapper.printing .cover-image-progress {
-            filter: drop-shadow(0 0 12px rgba(74, 222, 128, 0.7))
-                    drop-shadow(0 0 6px rgba(74, 222, 128, 0.9))
-                    drop-shadow(0 0 3px rgba(255, 255, 255, 0.5))
+            filter: drop-shadow(0 0 6px rgba(74, 222, 128, 0.7))
+                    drop-shadow(0 0 3px rgba(74, 222, 128, 0.9))
+                    drop-shadow(0 0 2px rgba(255, 255, 255, 0.4))
                     brightness(1.15) contrast(1.2);
             animation: modelBuildGlow 2s ease-in-out infinite;
         }
         @keyframes modelBuildGlow {
             0%, 100% { 
-                filter: drop-shadow(0 0 10px rgba(74, 222, 128, 0.6))
-                        drop-shadow(0 0 5px rgba(74, 222, 128, 0.8))
-                        drop-shadow(0 0 2px rgba(255, 255, 255, 0.4))
+                filter: drop-shadow(0 0 5px rgba(74, 222, 128, 0.6))
+                        drop-shadow(0 0 3px rgba(74, 222, 128, 0.8))
+                        drop-shadow(0 0 1px rgba(255, 255, 255, 0.3))
                         brightness(1.1) contrast(1.15);
             }
             50% { 
-                filter: drop-shadow(0 0 20px rgba(74, 222, 128, 0.8))
-                        drop-shadow(0 0 10px rgba(74, 222, 128, 1))
-                        drop-shadow(0 0 4px rgba(255, 255, 255, 0.6))
+                filter: drop-shadow(0 0 10px rgba(74, 222, 128, 0.8))
+                        drop-shadow(0 0 5px rgba(74, 222, 128, 1))
+                        drop-shadow(0 0 2px rgba(255, 255, 255, 0.5))
                         brightness(1.2) contrast(1.2);
             }
         }
@@ -4597,9 +4599,9 @@ class Prism3DPrinterCard extends HTMLElement {
         }
         /* Paused state - yellow glow following model shape */
         .cover-image-wrapper.paused .cover-image-progress {
-            filter: drop-shadow(0 0 12px rgba(251, 191, 36, 0.7))
-                    drop-shadow(0 0 6px rgba(251, 191, 36, 0.9))
-                    drop-shadow(0 0 3px rgba(255, 255, 255, 0.4))
+            filter: drop-shadow(0 0 6px rgba(251, 191, 36, 0.7))
+                    drop-shadow(0 0 3px rgba(251, 191, 36, 0.9))
+                    drop-shadow(0 0 2px rgba(255, 255, 255, 0.3))
                     brightness(1.1) contrast(1.15);
             animation: none;
         }

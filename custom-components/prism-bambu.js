@@ -371,6 +371,11 @@ class PrismBambuCard extends HTMLElement {
               name: 'notify_on_filament_change',
               label: 'Notify on filament change',
               selector: { boolean: {} }
+            },
+            {
+              name: 'notification_url',
+              label: 'Dashboard URL (opens on tap, e.g. /lovelace/printers)',
+              selector: { text: {} }
             }
           ]
         }
@@ -1353,13 +1358,20 @@ class PrismBambuCard extends HTMLElement {
       return;
     }
     
+    // Build click URL - opens dashboard when notification is tapped
+    const clickUrl = this.config.notification_url || '/lovelace';
+    
     const notificationData = {
       message: message,
       title: title || 'Bambu Lab Printer',
       data: {
         ...data,
         tag: `bambu_${this.config.printer}`,
-        group: 'bambu_lab_notifications'
+        group: 'bambu_lab_notifications',
+        // iOS: Opens URL when notification is tapped
+        url: clickUrl,
+        // Android: Opens URL when notification is tapped
+        clickAction: clickUrl
       }
     };
     

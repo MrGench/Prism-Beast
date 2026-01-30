@@ -511,6 +511,46 @@ Receive instant notifications on your mobile devices when printer status changes
 
 **Multi-Device Support**: Send notifications to multiple devices simultaneously via the device picker in the visual editor.
 
+**Click to Open Dashboard**: Configure `notification_url` (e.g., `/lovelace/printers`) to open your dashboard when tapping the notification.
+
+> **Note**: Card-based notifications require an open browser/dashboard. For reliable "always-on" notifications, use a Home Assistant Automation instead:
+
+<details>
+<summary><b>Home Assistant Automation for Always-On Notifications (click to expand)</b></summary>
+
+```yaml
+automation:
+  - alias: "3D Printer Print Complete"
+    trigger:
+      - platform: state
+        entity_id: sensor.bambu_print_status  # or sensor.k1_print_status
+        to: "finish"
+    action:
+      - service: notify.mobile_app_iphone
+        data:
+          title: "Print Complete"
+          message: "{{ state_attr(trigger.entity_id, 'friendly_name') }} finished!"
+          data:
+            url: "/lovelace/printers"
+            clickAction: "/lovelace/printers"
+
+  - alias: "3D Printer Print Failed"
+    trigger:
+      - platform: state
+        entity_id: sensor.bambu_print_status
+        to: "failed"
+    action:
+      - service: notify.mobile_app_iphone
+        data:
+          title: "Print Failed!"
+          message: "{{ state_attr(trigger.entity_id, 'friendly_name') }} failed!"
+          data:
+            url: "/lovelace/printers"
+            priority: high
+```
+
+</details>
+
 **Interactions:**
 
 - **Light Button**: Toggle Chamber Light on/off (button shows immediate feedback)
