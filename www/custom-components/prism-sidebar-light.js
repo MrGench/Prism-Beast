@@ -477,7 +477,11 @@ class PrismSidebarLightCard extends HTMLElement {
     }
     
     async _createCustomCard() {
-        if (!this.customCardConfig) return null;
+        // Validate config exists and has a type
+        if (!this.customCardConfig || !this.customCardConfig.type) {
+            console.debug('Prism Sidebar Light: No valid custom card config (missing type)');
+            return null;
+        }
         
         try {
             // Method 1: Try using HA's official card helpers (preferred)
@@ -496,7 +500,6 @@ class PrismSidebarLightCard extends HTMLElement {
             } else {
                 // Fallback: direct element creation
                 let cardType = this.customCardConfig.type;
-                if (!cardType) return null;
                 
                 // Strip 'custom:' prefix if present (HA uses this in YAML but element name doesn't have it)
                 if (cardType.startsWith('custom:')) {
@@ -526,7 +529,10 @@ class PrismSidebarLightCard extends HTMLElement {
     }
     
     async _insertCustomCard() {
-        if (!this.customCardConfig) return;
+        // Validate config exists and has a type before attempting to create
+        if (!this.customCardConfig || !this.customCardConfig.type) {
+            return;
+        }
         
         const slot = this.shadowRoot?.getElementById('custom-card-slot');
         if (!slot) return;
@@ -2036,7 +2042,8 @@ class PrismSidebarLightCard extends HTMLElement {
         this.setupListeners();
         
         // Insert custom card if configured (async - uses card helpers)
-        if (this.customCardConfig) {
+        // Only attempt if we have a valid config with a type
+        if (this.customCardConfig && this.customCardConfig.type) {
             this._insertCustomCard();
         }
     }
