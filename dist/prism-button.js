@@ -90,7 +90,12 @@ class PrismButtonCard extends HTMLElement {
             },
             {
               name: "status_entity",
-              label: "Status Entity (show state of this entity on button)",
+              label: "Status Entity 1 (show state of this entity on button)",
+              selector: { entity: {} }
+            },
+            {
+              name: "status_entity_2",
+              label: "Status Entity 2 (optional, shown next to first)",
               selector: { entity: {} }
             },
             {
@@ -134,6 +139,7 @@ class PrismButtonCard extends HTMLElement {
     this._config.popup_icon = config.popup_icon || 'mdi:card-multiple-outline';
     this._config.popup_title = config.popup_title || '';
     this._config.status_entity = config.status_entity || null;
+    this._config.status_entity_2 = config.status_entity_2 || null;
     this._config.popup_cards = config.popup_cards || null;
     this._updateCard();
   }
@@ -933,8 +939,41 @@ class PrismButtonCard extends HTMLElement {
     const brightness = hasBrightness ? this._getBrightness() : 0;
     const showSlider = hasBrightness && isActive;
     
-    // State display - show brightness percentage if available
-    const stateDisplay = (isActive && hasBrightness && brightness > 0) ? `${brightness}%` : state;
+    // Helper: Format numeric values with max 1 decimal place
+    const formatValue = (val) => {
+      const num = parseFloat(val);
+      if (!isNaN(num)) {
+        // Round to 1 decimal place, remove trailing .0
+        const rounded = Math.round(num * 10) / 10;
+        return rounded % 1 === 0 ? rounded.toString() : rounded.toFixed(1);
+      }
+      return val;
+    };
+    
+    // State display - show brightness percentage if available, or state with unit
+    let stateDisplay;
+    if (isActive && hasBrightness && brightness > 0) {
+      stateDisplay = `${brightness}%`;
+    } else if (this._config.use_as_popup && this._config.status_entity && entity) {
+      // In popup mode with status_entity, show state with unit (formatted)
+      const unit = entity.attributes.unit_of_measurement || '';
+      const formattedState = formatValue(state);
+      stateDisplay = `${formattedState}${unit ? ' ' + unit : ''}`;
+    } else {
+      stateDisplay = state;
+    }
+    
+    // Second status entity (for popup mode)
+    let stateDisplay2 = null;
+    if (this._config.use_as_popup && this._config.status_entity_2 && this._hass) {
+      const entity2 = this._hass.states[this._config.status_entity_2];
+      if (entity2) {
+        // Format state with unit if available (formatted)
+        const unit = entity2.attributes.unit_of_measurement || '';
+        const formattedState = formatValue(entity2.state);
+        stateDisplay2 = `${formattedState}${unit ? ' ' + unit : ''}`;
+      }
+    }
     
     // Show state option (default: true)
     const showState = this._config.show_state !== false;
@@ -1135,6 +1174,13 @@ class PrismButtonCard extends HTMLElement {
           text-overflow: ellipsis;
           white-space: nowrap;
         }
+        ha-card .state-wrapper {
+          display: flex;
+          flex-direction: row;
+          align-items: center;
+          gap: 12px;
+          ${!showState ? 'display: none;' : ''}
+        }
         ha-card .state {
           font-size: 0.75rem;
           font-weight: 500;
@@ -1144,7 +1190,15 @@ class PrismButtonCard extends HTMLElement {
           overflow: hidden;
           text-overflow: ellipsis;
           white-space: nowrap;
-          ${!showState ? 'display: none;' : ''}
+        }
+        ha-card .state-2 {
+          font-size: 0.75rem;
+          font-weight: 500;
+          color: rgba(255, 255, 255, 0.5);
+          line-height: 1.2;
+          overflow: hidden;
+          text-overflow: ellipsis;
+          white-space: nowrap;
         }
         
         /* Responsive: Tablet */
@@ -1174,7 +1228,10 @@ class PrismButtonCard extends HTMLElement {
           </div>
           <div class="info">
             <div class="name">${friendlyName}</div>
-            <div class="state">${stateDisplay}</div>
+            <div class="state-wrapper">
+              <div class="state">${stateDisplay}</div>
+              ${stateDisplay2 ? `<div class="state-2">${stateDisplay2}</div>` : ''}
+            </div>
           </div>
         </div>
       </ha-card>

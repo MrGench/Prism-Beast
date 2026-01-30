@@ -162,7 +162,7 @@ class PrismCrealityCard extends HTMLElement {
             },
             {
               name: 'show_aux_fan',
-              label: 'Show Aux Fan',
+              label: 'Show Side Fan',
               default: true,
               selector: { boolean: {} }
             },
@@ -1196,10 +1196,23 @@ class PrismCrealityCard extends HTMLElement {
           remainingBadge.remove();
         }
         
-        // Update type text
+        // Update type text (side view)
         const cfsType = spoolmanSlot.querySelector('.cfs-type');
         if (cfsType) {
           cfsType.textContent = spoolData?.type || 'Select';
+        }
+        
+        // Update front view labels
+        const frontLabelType = spoolmanSlot.querySelector('.spool-front-label-type');
+        if (frontLabelType) {
+          frontLabelType.textContent = spoolData?.type || 'Select';
+        }
+        
+        const frontLabelWeight = spoolmanSlot.querySelector('.spool-front-label-weight');
+        if (frontLabelWeight && spoolData) {
+          frontLabelWeight.textContent = `${Math.round(spoolData.remaining)}g`;
+        } else if (frontLabelWeight && !spoolData) {
+          frontLabelWeight.textContent = '';
         }
         
         // Update active class
@@ -1446,19 +1459,38 @@ class PrismCrealityCard extends HTMLElement {
   _findSpoolmanEntityById(spoolId) {
     if (!this._hass || !spoolId) return null;
     
-    // Search through all Spoolman spool entities
+    const spoolIdStr = String(spoolId);
+    
+    // Method 1: Direct entity ID match (most common pattern: sensor.spoolman_spool_X)
+    const directEntityId = `sensor.spoolman_spool_${spoolIdStr}`;
+    if (this._hass.states[directEntityId]) {
+      console.log(`[Prism-Creality] Found Spoolman entity ${directEntityId} for spool ID ${spoolId} (direct match)`);
+      return directEntityId;
+    }
+    
+    // Method 2: Alternative pattern (sensor.spoolman_X)
+    const altEntityId = `sensor.spoolman_${spoolIdStr}`;
+    if (this._hass.states[altEntityId]) {
+      console.log(`[Prism-Creality] Found Spoolman entity ${altEntityId} for spool ID ${spoolId} (alt match)`);
+      return altEntityId;
+    }
+    
+    // Method 3: Search by attribute (for non-standard entity naming)
     for (const entityId of Object.keys(this._hass.states)) {
-      if (/^sensor\.spoolman_spool_\d+$/.test(entityId)) {
+      if (/^sensor\.spoolman/.test(entityId)) {
         const state = this._hass.states[entityId];
         const attrs = state?.attributes || {};
         
-        // Check if this entity's spool ID matches
-        if (attrs.id === spoolId || attrs.spool_id === spoolId) {
+        // Check if this entity's spool ID matches (compare as strings to avoid type mismatch)
+        const entitySpoolId = attrs.id ?? attrs.spool_id ?? null;
+        if (entitySpoolId !== null && String(entitySpoolId) === spoolIdStr) {
+          console.log(`[Prism-Creality] Found Spoolman entity ${entityId} for spool ID ${spoolId} (attribute match)`);
           return entityId;
         }
       }
     }
     
+    console.log(`[Prism-Creality] No Spoolman entity found for spool ID ${spoolId}`);
     return null;
   }
   
@@ -4059,10 +4091,13 @@ class PrismCrealityCard extends HTMLElement {
     // Moonraker K1 fan mapping: Fan0 = Model/Part, Fan1 = Case/Enclosure, Fan2 = Aux/Side
     // Note: chamber_fan_temp is a temperature sensor, not a fan speed!
     // Moonraker uses number domain for fan control entities
+    // Model/Part Fan: The main cooling fan for the print
+    // Moonraker: print_cooling_fan (sensor) or output_pin_fan0 (number)
+    // Note: hotend_fan is NOT the model fan - it cools the hotend and runs at 100% when hot!
     let modelFanEntity = findMulti(['modelfan', 'model_fan', 'part_fan', 'fan_speed', 'print_cooling_fan']);
     if (!modelFanEntity) {
-      // Moonraker: hotend_fan is a sensor, output_pin_fan0 is the model/part fan
-      modelFanEntity = findMulti(['hotend_fan'], 'sensor') || findMulti(['output_pin_fan0'], 'number');
+      // Try sensor domain first for print_cooling_fan, then number domain for output_pin_fan0
+      modelFanEntity = findMulti(['print_cooling_fan'], 'sensor') || findMulti(['output_pin_fan0'], 'number');
     }
     
     // Case fan: Moonraker uses output_pin_fan1 (number domain)
@@ -4071,8 +4106,8 @@ class PrismCrealityCard extends HTMLElement {
       caseFanEntity = findMulti(['output_pin_fan1'], 'number');
     }
     
-    // Aux fan: Moonraker uses output_pin_fan2 (number domain)
-    let auxFanEntity = findMulti(['auxiliaryfan', 'auxiliary_fan', 'aux_fan']);
+    // Aux fan: Moonraker uses output_pin_fan2 (number domain), creality_ws uses side_fan
+    let auxFanEntity = findMulti(['auxiliaryfan', 'auxiliary_fan', 'aux_fan', 'side_fan']);
     if (!auxFanEntity) {
       auxFanEntity = findMulti(['output_pin_fan2'], 'number');
     }
@@ -4203,14 +4238,27 @@ class PrismCrealityCard extends HTMLElement {
     const targetBedTemp = this.getEntityValueById(targetBedTempEntity);
     const chamberTemp = this.getEntityValueById(boxTempEntity);
     
-    // Fans - need special handling for number entities which may have 0-1 or 0-255 range
+    // Fans - need special handling for different domains (fan, number, sensor)
     const getFanSpeedPercent = (entityId) => {
       if (!entityId) return 0;
       const state = this._hass.states[entityId];
       if (!state) return 0;
       
-      const value = parseFloat(state.state) || 0;
       const domain = entityId.split('.')[0];
+      
+      // For fan entities (creality_ws), use the percentage attribute
+      if (domain === 'fan') {
+        // State is "on"/"off", percentage is in attributes
+        if (state.state === 'off') return 0;
+        const percentage = state.attributes?.percentage;
+        if (percentage !== undefined && percentage !== null) {
+          return parseFloat(percentage) || 0;
+        }
+        // If no percentage attribute but fan is on, assume 100%
+        return state.state === 'on' ? 100 : 0;
+      }
+      
+      const value = parseFloat(state.state) || 0;
       
       // For number entities, normalize to percentage based on max value
       if (domain === 'number') {
@@ -6357,7 +6405,7 @@ class PrismCrealityCard extends HTMLElement {
                         <div class="pill-icon-container"><ha-icon icon="mdi:weather-windy"></ha-icon></div>
                         <div class="pill-content">
                             <span class="pill-value" data-field="aux-fan">${Math.round(data.auxFanSpeed)}%</span>
-                            <span class="pill-label">Aux</span>
+                            <span class="pill-label">Side</span>
                         </div>
                     </div>
                     ` : ''}

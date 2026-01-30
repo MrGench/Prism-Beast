@@ -299,6 +299,7 @@ A 3D printer card for **Moonraker/Klipper** printers (Voron, Prusa, RatRig, Ende
 - ✅ **Progress & Layer Info**: Real-time print progress
 - ✅ **Controls**: Pause/Resume, Stop, Home buttons
 - ✅ **Light Control**: Toggle printer light
+- ✅ **Spoolman Integration**: Select and track filament from Spoolman
 
 **Usage:**
 ```yaml
@@ -312,6 +313,46 @@ A 3D printer card for **Moonraker/Klipper** printers (Voron, Prusa, RatRig, Ende
 **Supported Integrations:**
 - [Moonraker Home Assistant](https://github.com/marcolivierarsenault/moonraker-home-assistant)
 - Native Klipper integration
+
+**Spoolman Integration:**
+
+Enable Spoolman support to select and track filament directly from the card.
+
+**Prerequisites:**
+- **[Spoolman](https://github.com/Donkie/Spoolman)** - Filament inventory system
+- **[Spoolman Home Assistant Integration](https://github.com/Disane87/spoolman-homeassistant)** - HA integration for Spoolman
+
+**Spoolman Configuration:**
+```yaml
+- type: custom:prism-3dprinter
+  printer: <device_id>
+  name: Voron 2.4
+  # Spoolman Integration
+  enable_spoolman: true
+  active_spool_id_entity: sensor.voron_spool_id  # Moonraker spool_id for auto-sync (optional)
+  filament_usage_entity: sensor.voron_filament_used  # Usage sensor (Used Material Length)
+  enable_spoolman_tracking: true  # Enable automatic tracking after print
+  spool_view: front  # Display style: 'side' (circular) or 'front' (AMS-style vertical)
+```
+
+**Configuration Options:**
+
+| Option | Description |
+|--------|-------------|
+| `enable_spoolman` | Enable Spoolman spool selection slot |
+| `active_spool_id_entity` | Moonraker spool_id sensor for automatic sync (e.g., `sensor.voron_spool_id`) |
+| `filament_usage_entity` | Sensor that measures used filament (Used Material Length) |
+| `enable_spoolman_tracking` | Automatically report usage to Spoolman after print completes |
+| `spool_view` | Display style: `side` (circular, default) or `front` (AMS-style vertical) |
+
+**Moonraker Auto-Sync:**
+
+With Moonraker's native Spoolman integration, the active spool can sync automatically:
+
+1. In Fluidd/Mainsail, select a spool from Spoolman
+2. Moonraker updates `sensor.xxx_spool_id` with the Spoolman spool ID
+3. Configure `active_spool_id_entity` with this sensor
+4. The card automatically displays the corresponding Spoolman spool - no manual selection needed!
 
 ---
 
@@ -552,15 +593,14 @@ The card automatically detects CFS entities from ha_creality_ws:
 - Temperature & humidity pills
 - Click slot for detailed popup
 
-**Spoolman Integration (NEW v1.11.0):**
+**Spoolman Integration:**
 
-For printers **without CFS** (e.g., K1, K1C, Ender 3 V3), you can select a Spoolman spool. Filament consumption is automatically reported to Spoolman.
+For printers **without CFS** (e.g., K1, K1C, Ender 3 V3), you can integrate Spoolman for filament management. Features include manual spool selection, automatic Moonraker sync, and usage tracking.
 
 **Prerequisites:**
 - **[Spoolman](https://github.com/Donkie/Spoolman)** - Filament inventory system (required)
 - **[Spoolman Home Assistant Integration](https://github.com/Disane87/spoolman-homeassistant)** - HA integration for Spoolman (required)
 - **[Spoolman Home Assistant Addon](https://github.com/bytenoodle/hassioaddon)** - Optional: Spoolman as HA addon (recommended for easy installation)
-- ha_creality_ws integration with `used_material_length` sensor (measures filament consumption in cm)
 
 **Spoolman Configuration:**
 ```yaml
@@ -568,21 +608,71 @@ For printers **without CFS** (e.g., K1, K1C, Ender 3 V3), you can select a Spool
   printer: <device_id>
   # Spoolman Integration (only for printers without CFS)
   enable_spoolman: true
-  filament_usage_entity: sensor.k1_ws_used_material_length  # Usage sensor
-  enable_spoolman_tracking: true  # Enable automatic tracking
+  active_spool_id_entity: sensor.k1_098d_spool_id  # Moonraker spool_id for auto-sync (optional)
+  filament_usage_entity: sensor.k1_ws_used_material_length  # Usage sensor (Used Material Length)
+  enable_spoolman_tracking: true  # Enable automatic tracking after print
+  spool_view: front  # Display style: 'side' (circular) or 'front' (AMS-style vertical)
 ```
 
+**Configuration Options:**
+
+| Option | Description |
+|--------|-------------|
+| `enable_spoolman` | Enable Spoolman spool selection slot |
+| `active_spool_id_entity` | Moonraker spool_id sensor for automatic sync (e.g., `sensor.k1_098d_spool_id`) |
+| `filament_usage_entity` | Sensor that measures used filament (Used Material Length in cm) |
+| `enable_spoolman_tracking` | Automatically report usage to Spoolman after print completes |
+| `spool_view` | Display style: `side` (circular, default) or `front` (AMS-style vertical) |
+
 **How it works:**
-1. When `enable_spoolman` is enabled, a spool slot appears below the printer (like CFS)
-2. Clicking the slot opens a popup with all active Spoolman spools
-3. Only spools with remaining filament (not archived, remaining > 0) are shown
-4. The selected spool is persistently stored in localStorage (per printer)
-5. With tracking enabled, filament consumption is automatically reported to Spoolman after print completion
+
+1. **Manual Selection**: Click the spool slot to open a popup with all active Spoolman spools
+2. **Auto-Sync with Moonraker**: If `active_spool_id_entity` is configured, the card automatically displays the spool that's active in Moonraker/Fluidd
+3. **Usage Tracking**: When a print completes, the filament consumption is calculated and reported to Spoolman via `spoolman.use_spool_filament`
+
+**Moonraker Auto-Sync:**
+
+If you use Moonraker with Spoolman integration, you can configure `active_spool_id_entity` to automatically sync the active spool:
+
+1. In Fluidd/Mainsail, select a spool from Spoolman
+2. Moonraker updates `sensor.xxx_spool_id` with the Spoolman spool ID
+3. The card automatically displays the corresponding Spoolman spool
+4. No manual selection needed!
+
+<details>
+<summary><b>Orca Slicer Auto-Select Setup (click to expand)</b></summary>
+
+To automatically set the active spool when starting a print from Orca Slicer:
+
+**1. Add G-Code Macro** (in `gcode_macro.cfg`):
+```ini
+[gcode_macro SET_ACTIVE_SPOOL]
+gcode:
+  {% if params.ID %}
+    {action_call_remote_method("spoolman_set_active_spool", spool_id=params.ID|int)}
+  {% else %}
+    {action_call_remote_method("spoolman_set_active_spool", spool_id=None)}
+  {% endif %}
+```
+
+**2. Enable Spoolman in Moonraker** (in `moonraker.conf`):
+```ini
+[spoolman]
+server: http://localhost:7912
+```
+
+**3. Add to Orca Slicer Filament Profile** (Filament G-Code → Start G-Code):
+```
+SET_ACTIVE_SPOOL ID=2
+```
+Replace `2` with your Spoolman spool ID.
+
+</details>
 
 **Notes:**
 - CFS has priority: For printers with CFS, the Spoolman slot is **not** displayed
 - Filament consumption is measured in **cm** and automatically converted to **mm** for Spoolman
-- Tracking uses the `spoolman.use_spool_filament` service
+- The spool selection is stored in localStorage per printer (for manual selection fallback)
 
 **ha_creality_ws Entity Mapping:**
 
