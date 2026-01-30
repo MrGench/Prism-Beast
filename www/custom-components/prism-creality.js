@@ -267,8 +267,13 @@ class PrismCrealityCard extends HTMLElement {
               selector: { boolean: {} }
             },
             {
+              name: 'active_spool_id_entity',
+              label: 'Active Spool ID Entity (Moonraker spool_id sensor for auto-sync)',
+              selector: { entity: { domain: 'sensor' } }
+            },
+            {
               name: 'filament_usage_entity',
-              label: 'Filament Usage Entity (measures used filament, e.g. sensor.xxx_used_material_length)',
+              label: 'Filament Usage Entity (Used Material Length)',
               selector: { entity: { domain: 'sensor' } }
             },
             {
@@ -1418,7 +1423,43 @@ class PrismCrealityCard extends HTMLElement {
   
   // Get the currently selected spool entity ID from localStorage
   _getSelectedSpoolEntityId() {
+    // Priority 1: Check if Moonraker active_spool_id_entity is configured and has a valid ID
+    if (this.config?.active_spool_id_entity && this._hass) {
+      const spoolIdState = this._hass.states[this.config.active_spool_id_entity];
+      const moonrakerSpoolId = spoolIdState?.state;
+      
+      // Only use Moonraker ID if it's a valid number (not 'unknown', 'unavailable', '0', '-1', etc.)
+      if (moonrakerSpoolId && !isNaN(parseInt(moonrakerSpoolId)) && parseInt(moonrakerSpoolId) > 0) {
+        // Find the Spoolman entity that matches this spool ID
+        const matchingEntity = this._findSpoolmanEntityById(parseInt(moonrakerSpoolId));
+        if (matchingEntity) {
+          return matchingEntity;
+        }
+      }
+    }
+    
+    // Priority 2: Fall back to manually selected spool from localStorage
     return localStorage.getItem(this._getSpoolmanStorageKey());
+  }
+  
+  // Find Spoolman entity by spool ID (from Moonraker)
+  _findSpoolmanEntityById(spoolId) {
+    if (!this._hass || !spoolId) return null;
+    
+    // Search through all Spoolman spool entities
+    for (const entityId of Object.keys(this._hass.states)) {
+      if (/^sensor\.spoolman_spool_\d+$/.test(entityId)) {
+        const state = this._hass.states[entityId];
+        const attrs = state?.attributes || {};
+        
+        // Check if this entity's spool ID matches
+        if (attrs.id === spoolId || attrs.spool_id === spoolId) {
+          return entityId;
+        }
+      }
+    }
+    
+    return null;
   }
   
   // Save selected spool entity ID to localStorage
