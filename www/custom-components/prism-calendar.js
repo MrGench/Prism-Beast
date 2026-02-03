@@ -479,6 +479,17 @@ class PrismCalendarCard extends HTMLElement {
         .event-title { font-size: 15px; font-weight: 500; color: white; margin-bottom: 4px; }
         .event-time { font-size: 12px; color: rgba(255,255,255,0.5); display: flex; align-items: center; gap: 6px; }
         
+        /* Responsive: Compact spacing for tablets and mobile */
+        @media (max-width: 1024px) {
+            .timeline {
+                width: 22px;
+                margin-left: 0px;
+            }
+            .event-item {
+                gap: 8px;
+            }
+        }
+        
       </style>
       <div class="card">
         <div class="header">

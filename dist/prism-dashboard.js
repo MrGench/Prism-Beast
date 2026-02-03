@@ -3,7 +3,7 @@
  * https://github.com/BangerTech/Prism-Dashboard
  * 
  * Version: 1.5.9
- * Build Date: 2026-01-30T18:28:05.799Z
+ * Build Date: 2026-02-03T08:35:20.515Z
  * 
  * This file contains all Prism custom cards bundled together.
  * Just add this single file as a resource in Lovelace:
@@ -7796,6 +7796,17 @@ class PrismCalendarCard extends HTMLElement {
         .event-title { font-size: 15px; font-weight: 500; color: white; margin-bottom: 4px; }
         .event-time { font-size: 12px; color: rgba(255,255,255,0.5); display: flex; align-items: center; gap: 6px; }
         
+        /* Responsive: Compact spacing for tablets and mobile */
+        @media (max-width: 1024px) {
+            .timeline {
+                width: 22px;
+                margin-left: 0px;
+            }
+            .event-item {
+                gap: 8px;
+            }
+        }
+        
       </style>
       <div class="card">
         <div class="header">
@@ -8333,6 +8344,17 @@ class PrismCalendarLightCard extends HTMLElement {
         }
         .event-title { font-size: 15px; font-weight: 500; color: #1a1a1a; margin-bottom: 4px; }
         .event-time { font-size: 12px; color: rgba(0,0,0,0.5); display: flex; align-items: center; gap: 6px; }
+        
+        /* Responsive: Compact spacing for tablets and mobile */
+        @media (max-width: 1024px) {
+            .timeline {
+                width: 22px;
+                margin-left: 0px;
+            }
+            .event-item {
+                gap: 8px;
+            }
+        }
         
       </style>
       <div class="card">
