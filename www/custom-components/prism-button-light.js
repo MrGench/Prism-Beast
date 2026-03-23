@@ -1385,26 +1385,30 @@ class PrismButtonLightCard extends HTMLElement {
         this._dragStartBrightness = brightness;
       };
       
-      // Handle move during interaction (only for brightness slider)
+      // Handle move during interaction
       const handleInteractionMove = (e) => {
-        if (!showSlider) return;
-        
         const clientX = e.touches ? e.touches[0].clientX : e.clientX;
         const clientY = e.touches ? e.touches[0].clientY : e.clientY;
         
         const deltaX = Math.abs(clientX - touchStartX);
         const deltaY = Math.abs(clientY - touchStartY);
         
-        // Start dragging based on layout direction
+        // Mark as moved if finger moved more than 10px in ANY direction
+        // Prevents accidental taps during scrolling/swiping on mobile
+        if (deltaX > 10 || deltaY > 10) {
+          hasMoved = true;
+        }
+        
+        if (!showSlider) return;
+        
+        // Start brightness slider dragging based on layout direction
         if (layout === 'vertical') {
           if (deltaY > 10 && deltaY > deltaX) {
             this._isDragging = true;
-            hasMoved = true;
           }
         } else {
           if (deltaX > 10 && deltaX > deltaY) {
             this._isDragging = true;
-            hasMoved = true;
           }
         }
         

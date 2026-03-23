@@ -1381,28 +1381,30 @@ class PrismButtonCard extends HTMLElement {
         this._dragStartBrightness = brightness;
       };
       
-      // Handle move during interaction (only for brightness slider)
+      // Handle move during interaction
       const handleInteractionMove = (e) => {
-        if (!showSlider) return;
-        
         const clientX = e.touches ? e.touches[0].clientX : e.clientX;
         const clientY = e.touches ? e.touches[0].clientY : e.clientY;
         
         const deltaX = Math.abs(clientX - this._touchStartX);
         const deltaY = Math.abs(clientY - this._touchStartY);
         
-        // Start dragging based on layout direction
+        // Mark as moved if finger moved more than 10px in ANY direction
+        // Prevents accidental taps during scrolling/swiping on mobile
+        if (deltaX > 10 || deltaY > 10) {
+          this._hasMoved = true;
+        }
+        
+        if (!showSlider) return;
+        
+        // Start brightness slider dragging based on layout direction
         if (layout === 'vertical') {
-          // Vertical: Start dragging if moved more than 10px vertically and more vertical than horizontal
           if (deltaY > 10 && deltaY > deltaX) {
             this._isDragging = true;
-            this._hasMoved = true;
           }
         } else {
-          // Horizontal: Start dragging if moved more than 10px horizontally and more horizontal than vertical
           if (deltaX > 10 && deltaX > deltaY) {
             this._isDragging = true;
-            this._hasMoved = true;
           }
         }
         
@@ -1521,7 +1523,7 @@ class PrismButtonCard extends HTMLElement {
       };
       
       const documentTouchMove = (e) => {
-        if (this._isDragging) {
+        if (this._isDragging || this._touchStart > 0) {
           handleInteractionMove(e);
         }
       };
