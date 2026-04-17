@@ -596,7 +596,7 @@ class PrismRoomCard extends HTMLElement {
     
     // Extract the inner HTML from the new popup HTML
     const newPopupHTML = this._getPopupHTML();
-    const match = newPopupHTML.match(/<div class="prism-room-popup">([\s\S]*)<\/div>$/);
+    const match = newPopupHTML.match(/<div class="prism-room-popup">([\s\S]*)<\/div>\s*$/);
     if (match) {
       popup.innerHTML = match[1];
       this._setupPopupListeners();

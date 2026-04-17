@@ -439,7 +439,11 @@ A Bambu Lab 3D printer card with AMS (Automatic Material System) support, glassm
 ```yaml
 - type: custom:prism-bambu
   printer: <device_id>  # Bambu Lab printer device
-  ams_device: <ams_device_id>  # Optional: AMS device (if multiple AMS present)
+  ams_device: <ams_device_id>  # Optional: AMS Unit 1
+  ams_device_2: <ams_device_id>  # Optional: AMS Unit 2
+  ams_device_3: <ams_device_id>  # Optional: AMS Unit 3
+  ams_device_4: <ams_device_id>  # Optional: AMS Unit 4
+  ams_view: tabs  # Optional: 'tabs' (default) or 'stacked' for multi-AMS display
   name: Bambu Lab Printer
   camera_entity: camera.x1c_1_kamera  # Optional: Camera Entity
   camera_live_stream: true  # Optional: Enable live camera stream
@@ -465,7 +469,8 @@ A Bambu Lab 3D printer card with AMS (Automatic Material System) support, glassm
 - ✅ **Real-Time 3D Model Build-Up**: Model preview builds up from bottom to top during printing with transparent ghost image in background
 - ✅ **Smart Status Detection**: Intelligently combines `print_status` and `stage` entities for accurate status (e.g., "Filament Change", "Pause", "Printing")
 - ✅ **Push Notifications**: Configurable notifications for print complete, pause, failed, and filament change events (multi-device support)
-- ✅ **AMS Support**: Shows all 4 AMS slots with color visualization
+- ✅ **Multi-AMS Support**: Up to 4 AMS units (AMS, AMS Lite, AMS 2 Pro, AMS HT, External Spool) with tabs or stacked display
+- ✅ **AMS Support**: Shows all 4 AMS slots per unit with color visualization
 - ✅ **AMS Humidity Display**: Supports both numeric values (newer systems) and A-E levels (older systems without real sensors)
 - ✅ **Filament Type Detection**: Supports PCTG, PETG, PLA, ABS, TPU, ASA, PA-CF, PA, PC, PVA, HIPS, PP
 - ✅ **Transparent Filament Display**: Detects transparent filaments via alpha channel or keywords (e.g., "clear", "transparent") with chessboard pattern
@@ -485,8 +490,9 @@ A Bambu Lab 3D printer card with AMS (Automatic Material System) support, glassm
 **Configuration in Visual Editor:**
 
 1. **Printer Device**: Select your Bambu Lab printer device from the device list
-2. **AMS Device** (optional): If multiple AMS present, select the desired AMS device
-3. **Name** (optional): Custom name for the card
+2. **AMS Unit 1-4** (optional): Select up to 4 AMS devices (AMS, AMS Lite, AMS 2 Pro, AMS HT, External Spool)
+3. **Multi-AMS Display** (optional): Choose "Tabs" (compact, switch between units) or "Stacked" (show all units at once)
+4. **Name** (optional): Custom name for the card
 4. **Camera Entity** (optional): Camera entity for live stream
 5. **Show Cover Image** (optional): Enable 3D model preview with real-time build-up effect
 6. **Cover Image Entity** (optional): Select entity for 3D model preview (e.g., `image.x1c_1_titelbild`)

@@ -71,13 +71,21 @@ class PrismLedCard extends HTMLElement {
               // Try to determine mode and color from attributes
               if (attr.color_mode === 'color_temp') {
                   this.mode = 'white';
-                  if (attr.color_temp !== undefined) {
-                      // Map mireds to 0-100 (rough approximation: 154-500 mireds -> 0-100%)
+                  // Prefer kelvin attributes (HA 2022.11+), fall back to mireds
+                  if (attr.color_temp_kelvin !== undefined) {
+                      const kelvin = attr.color_temp_kelvin;
+                      const minKelvin = attr.min_color_temp_kelvin || 2000;
+                      const maxKelvin = attr.max_color_temp_kelvin || 6500;
+                      this.localTemp = Math.max(0, Math.min(100, ((kelvin - minKelvin) / (maxKelvin - minKelvin)) * 100));
+                  } else if (attr.color_temp !== undefined) {
                       const mireds = attr.color_temp;
-                      const minMireds = 154; // ~6500K (cold)
-                      const maxMireds = 500; // ~2000K (warm)
-                      this.localTemp = Math.max(0, Math.min(100, ((mireds - minMireds) / (maxMireds - minMireds)) * 100));
+                      const minMireds = attr.min_mireds || 154;
+                      const maxMireds = attr.max_mireds || 500;
+                      // Invert: low mireds = high kelvin = cold
+                      this.localTemp = Math.max(0, Math.min(100, 100 - ((mireds - minMireds) / (maxMireds - minMireds)) * 100));
                   }
+              } else if (attr.color_mode === 'rgbw' || attr.color_mode === 'rgbww') {
+                  this.mode = 'white';
               } else {
                   this.mode = 'color';
                   if (attr.rgb_color && Array.isArray(attr.rgb_color) && attr.rgb_color.length >= 3) {
@@ -220,7 +228,6 @@ class PrismLedCard extends HTMLElement {
         if (!this._hass || !this.config.entity) return;
         
         if (this.mode === 'color') {
-            // Convert hex to RGB and call light.turn_on
             const rgb = this.hexToRgb(this.localColor);
             this._hass.callService('light', 'turn_on', {
                 entity_id: this.config.entity,
@@ -228,16 +235,65 @@ class PrismLedCard extends HTMLElement {
                 brightness_pct: this.localBrightness
             });
         } else {
-            // Map 0-100 temp to mireds (154-500 mireds range)
-            const minMireds = 154; // ~6500K (cold)
-            const maxMireds = 500; // ~2000K (warm)
-            const mireds = Math.round(minMireds + ((100 - this.localTemp) / 100) * (maxMireds - minMireds));
-            this._hass.callService('light', 'turn_on', {
-                entity_id: this.config.entity,
-                color_temp: mireds,
-                brightness_pct: this.localBrightness
-            });
+            const supportedModes = this._entity?.attributes?.supported_color_modes || [];
+
+            if (supportedModes.includes('color_temp')) {
+                // Use color_temp_kelvin (HA 2022.11+); fall back to mireds for older integrations
+                const attr = this._entity?.attributes || {};
+                if (attr.min_color_temp_kelvin !== undefined || attr.max_color_temp_kelvin !== undefined) {
+                    const minKelvin = attr.min_color_temp_kelvin || 2000;
+                    const maxKelvin = attr.max_color_temp_kelvin || 6500;
+                    const kelvin = Math.round(minKelvin + (this.localTemp / 100) * (maxKelvin - minKelvin));
+                    this._hass.callService('light', 'turn_on', {
+                        entity_id: this.config.entity,
+                        color_temp_kelvin: kelvin,
+                        brightness_pct: this.localBrightness
+                    });
+                } else {
+                    const minMireds = attr.min_mireds || 154;
+                    const maxMireds = attr.max_mireds || 500;
+                    const mireds = Math.round(minMireds + ((100 - this.localTemp) / 100) * (maxMireds - minMireds));
+                    this._hass.callService('light', 'turn_on', {
+                        entity_id: this.config.entity,
+                        color_temp: mireds,
+                        brightness_pct: this.localBrightness
+                    });
+                }
+            } else if (supportedModes.includes('rgbww')) {
+                // Dual white-channel lights: split warm/cold across the two channels
+                const warmValue = Math.round((1 - this.localTemp / 100) * 255);
+                const coldValue = Math.round((this.localTemp / 100) * 255);
+                this._hass.callService('light', 'turn_on', {
+                    entity_id: this.config.entity,
+                    rgbww_color: [0, 0, 0, warmValue, coldValue],
+                    brightness_pct: this.localBrightness
+                });
+            } else if (supportedModes.includes('rgbw')) {
+                // Single white-channel lights (e.g. ELK-BLEDOM RGBW): pure white channel
+                this._hass.callService('light', 'turn_on', {
+                    entity_id: this.config.entity,
+                    rgbw_color: [0, 0, 0, 255],
+                    brightness_pct: this.localBrightness
+                });
+            } else {
+                // RGB-only fallback (e.g. ELK-BLEDOM RGB): simulate warm/cold white via RGB
+                const rgb = this.tempToRgb(this.localTemp);
+                this._hass.callService('light', 'turn_on', {
+                    entity_id: this.config.entity,
+                    rgb_color: rgb,
+                    brightness_pct: this.localBrightness
+                });
+            }
         }
+    }
+
+    // Approximate warm-to-cold white as RGB for lights that lack color_temp support
+    tempToRgb(temp) {
+        // temp 0 = warm (~2700K), 100 = cold (~6500K)
+        const r = Math.round(255 - (temp / 100) * 60);
+        const g = Math.round(180 + (temp / 100) * 45);
+        const b = Math.round(80 + (temp / 100) * 175);
+        return [r, g, b];
     }
   
     handleAction(action, value) {

@@ -45,6 +45,9 @@ class PrismBambuCard extends HTMLElement {
     this._lastStatus = null; // Track status for re-render decisions
     this._updateThrottleTimer = null; // Throttle updates to prevent excessive re-renders
     this._snapshotInterval = null; // Interval for snapshot mode camera updates
+    this._activeAmsUnit = 0; // Active AMS tab index for multi-AMS tab mode
+    this._lastAutoSwitchUnit = -1; // Track last auto-switched unit to avoid fighting manual selection
+    this._manualAmsTabOverride = false; // Set when user manually clicks a tab
   }
   
   // Debug logging helper - only logs if DEBUG is enabled
@@ -97,8 +100,43 @@ class PrismBambuCard extends HTMLElement {
           schema: [
             {
               name: 'ams_device',
-              label: 'AMS Device (select your AMS)',
+              label: 'AMS Unit 1 (select your AMS)',
               selector: { device: { filter: amsFilterCombinations } }
+            },
+            {
+              name: 'ams_device_name',
+              label: 'AMS Unit 1 custom name (optional, overrides device name)',
+              selector: { text: {} }
+            },
+            {
+              name: 'ams_device_2',
+              label: 'AMS Unit 2 (optional)',
+              selector: { device: { filter: amsFilterCombinations } }
+            },
+            {
+              name: 'ams_device_2_name',
+              label: 'AMS Unit 2 custom name (optional)',
+              selector: { text: {} }
+            },
+            {
+              name: 'ams_device_3',
+              label: 'AMS Unit 3 (optional)',
+              selector: { device: { filter: amsFilterCombinations } }
+            },
+            {
+              name: 'ams_device_3_name',
+              label: 'AMS Unit 3 custom name (optional)',
+              selector: { text: {} }
+            },
+            {
+              name: 'ams_device_4',
+              label: 'AMS Unit 4 (optional)',
+              selector: { device: { filter: amsFilterCombinations } }
+            },
+            {
+              name: 'ams_device_4_name',
+              label: 'AMS Unit 4 custom name (optional)',
+              selector: { text: {} }
             },
             {
               name: 'spool_view',
@@ -112,6 +150,25 @@ class PrismBambuCard extends HTMLElement {
                   ]
                 } 
               }
+            },
+            {
+              name: 'ams_view',
+              label: 'Multi-AMS Display (only applies when 2+ AMS units configured)',
+              default: 'tabs',
+              selector: {
+                select: {
+                  options: [
+                    { value: 'tabs', label: 'Tabs (compact, switch between units)' },
+                    { value: 'stacked', label: 'Stacked (show all units at once)' }
+                  ]
+                }
+              }
+            },
+            {
+              name: 'ams_auto_switch',
+              label: 'Auto-switch to AMS unit with active filament (tabs mode only)',
+              default: true,
+              selector: { boolean: {} }
             }
           ]
         },
@@ -820,17 +877,51 @@ class PrismBambuCard extends HTMLElement {
       updatePill('custom-fan', `${Math.round(data.customFanSpeed)}%`);
     }
     
-    // Update AMS info pills
-    if (data.amsTemperature !== null) {
-      const amsTempPill = this.shadowRoot.querySelector('[data-pill="ams-temp"] .ams-pill-content .ams-pill-value');
-      if (amsTempPill) amsTempPill.textContent = `${Math.round(data.amsTemperature)}°C`;
+    // Auto-switch to AMS tab with active (printing) slot
+    if (data.amsUnits && data.amsUnits.length > 1 && data.amsView === 'tabs' &&
+        this.config.ams_auto_switch !== false) {
+      const activeUnitIdx = data.amsUnits.findIndex(unit =>
+        unit.amsData.some(slot => slot.active)
+      );
+      if (activeUnitIdx >= 0) {
+        if (activeUnitIdx !== this._lastAutoSwitchUnit) {
+          // Active unit changed (e.g. printer switched filament) - override manual selection
+          this._lastAutoSwitchUnit = activeUnitIdx;
+          this._manualAmsTabOverride = false;
+          if (activeUnitIdx !== this._activeAmsUnit) {
+            this.switchAmsUnit(activeUnitIdx);
+          }
+        }
+        // If active unit hasn't changed and user manually picked a different tab, respect it
+      }
     }
-    if (data.amsHumidity !== null) {
-      const amsHumidPill = this.shadowRoot.querySelector('[data-pill="ams-humidity"] .ams-pill-content .ams-pill-value');
-      if (amsHumidPill) {
-        amsHumidPill.textContent = typeof data.amsHumidity === 'number' 
-          ? `${Math.round(data.amsHumidity)}%` 
-          : data.amsHumidity;
+
+    // Update AMS info pills (supports multi-AMS: update all visible info bars)
+    if (data.amsUnits && data.amsUnits.length > 1) {
+      const infoBars = this.shadowRoot.querySelectorAll('.ams-info-bar[data-ams-unit]');
+      infoBars.forEach(bar => {
+        const idx = parseInt(bar.dataset.amsUnit);
+        const unit = data.amsUnits[idx];
+        if (!unit) return;
+        const tempEl = bar.querySelector('[data-pill="ams-temp"] .ams-pill-value');
+        if (tempEl && unit.temperature !== null) tempEl.textContent = `${Math.round(unit.temperature)}°C`;
+        const humEl = bar.querySelector('[data-pill="ams-humidity"] .ams-pill-value');
+        if (humEl && unit.humidity !== null) {
+          humEl.textContent = typeof unit.humidity === 'number' ? `${Math.round(unit.humidity)}%` : unit.humidity;
+        }
+      });
+    } else {
+      if (data.amsTemperature !== null) {
+        const amsTempPill = this.shadowRoot.querySelector('[data-pill="ams-temp"] .ams-pill-content .ams-pill-value');
+        if (amsTempPill) amsTempPill.textContent = `${Math.round(data.amsTemperature)}°C`;
+      }
+      if (data.amsHumidity !== null) {
+        const amsHumidPill = this.shadowRoot.querySelector('[data-pill="ams-humidity"] .ams-pill-content .ams-pill-value');
+        if (amsHumidPill) {
+          amsHumidPill.textContent = typeof data.amsHumidity === 'number' 
+            ? `${Math.round(data.amsHumidity)}%` 
+            : data.amsHumidity;
+        }
       }
     }
     
@@ -1129,6 +1220,18 @@ class PrismBambuCard extends HTMLElement {
       };
     }
     
+    // AMS tab switching handlers (manual click sets override flag)
+    const amsTabs = this.shadowRoot?.querySelectorAll('.ams-tab');
+    if (amsTabs && amsTabs.length > 0) {
+      amsTabs.forEach(tab => {
+        tab.onclick = (e) => {
+          e.stopPropagation();
+          this._manualAmsTabOverride = true;
+          this.switchAmsUnit(parseInt(tab.dataset.amsTab));
+        };
+      });
+    }
+
     // Filament slot click handlers - open popup with details
     const filamentSlots = this.shadowRoot?.querySelectorAll('.ams-slot.clickable');
     if (filamentSlots) {
@@ -1192,7 +1295,8 @@ class PrismBambuCard extends HTMLElement {
       if (el) el.textContent = value;
     };
     
-    setValue('slot', `Slot ${slotId}`);
+    const amsName = slotElement.dataset.amsName || '';
+    setValue('slot', amsName ? `${amsName} - Slot ${slotId}` : `Slot ${slotId}`);
     setValue('name', fullName || type);
     setValue('type', type);
     setValue('brand', brand || '-');
@@ -1222,6 +1326,31 @@ class PrismBambuCard extends HTMLElement {
     const overlay = this.shadowRoot?.querySelector('.filament-popup-overlay');
     if (overlay) {
       overlay.style.display = 'none';
+    }
+  }
+
+  switchAmsUnit(index) {
+    this._activeAmsUnit = index;
+    const tabs = this.shadowRoot?.querySelectorAll('.ams-tab');
+    const contents = this.shadowRoot?.querySelectorAll('.ams-tab-content');
+    if (!tabs || !contents) return;
+
+    tabs.forEach(tab => {
+      tab.classList.toggle('active', parseInt(tab.dataset.amsTab) === index);
+    });
+    contents.forEach(content => {
+      content.classList.toggle('hidden', parseInt(content.dataset.amsTabContent) !== index);
+    });
+
+    // Re-wire filament slot click handlers for newly visible slots
+    const visibleSlots = this.shadowRoot?.querySelectorAll('.ams-tab-content:not(.hidden) .ams-slot.clickable');
+    if (visibleSlots) {
+      visibleSlots.forEach(slot => {
+        slot.onclick = (e) => {
+          e.stopPropagation();
+          this.openFilamentPopup(slot);
+        };
+      });
     }
   }
   
@@ -3590,6 +3719,314 @@ class PrismBambuCard extends HTMLElement {
     PrismBambuCard.log('Multi-camera popup opened with', printerCount, 'printers');
   }
 
+  _isTrayEntity(entityInfo, entityId) {
+    if (entityInfo.translation_key && /^tray_\d+$/.test(entityInfo.translation_key)) {
+      return true;
+    }
+    if (entityId.includes('_slot_') || entityId.includes('_tray_')) {
+      return true;
+    }
+    return false;
+  }
+
+  _getAmsUnitData(amsDeviceId, unitIndex) {
+    const amsDevice = this._hass.devices?.[amsDeviceId];
+    if (!amsDevice) return null;
+
+    const amsModel = amsDevice.model || '';
+    const amsName = amsDevice.name || '';
+    const displayName = amsName || `AMS ${unitIndex + 1}`;
+
+    const isExternalSpool = amsModel.toLowerCase().includes('external spool') ||
+                            amsName.toLowerCase().includes('externalspool');
+
+    PrismBambuCard.log(`AMS unit ${unitIndex + 1}:`, amsName, 'model:', amsModel, 'isExternalSpool:', isExternalSpool);
+
+    const trayEntities = [];
+
+    if (isExternalSpool) {
+      for (const entityId in this._hass.entities) {
+        const entityInfo = this._hass.entities[entityId];
+        if (entityInfo.device_id === amsDeviceId) {
+          const state = this._hass.states[entityId];
+          const attr = state?.attributes || {};
+          if (attr.color || attr.type || attr.name || entityId.includes('sensor.')) {
+            if (!trayEntities.find(e => e.entityId === entityId)) {
+              trayEntities.push({
+                entityId,
+                translationKey: entityInfo.translation_key || 'external_spool',
+                ...entityInfo
+              });
+              break;
+            }
+          }
+        }
+      }
+    } else {
+      for (const entityId in this._hass.entities) {
+        const entityInfo = this._hass.entities[entityId];
+        if (entityInfo.device_id === amsDeviceId && this._isTrayEntity(entityInfo, entityId)) {
+          trayEntities.push({
+            entityId,
+            translationKey: entityInfo.translation_key || entityId,
+            ...entityInfo
+          });
+        }
+      }
+    }
+
+    trayEntities.sort((a, b) => {
+      const getNum = (e) => {
+        const tkMatch = e.translationKey?.match(/(\d+)$/);
+        if (tkMatch) return parseInt(tkMatch[1]);
+        const idMatch = e.entityId?.match(/slot_(\d+)|tray_(\d+)|spool(\d*)/i);
+        if (idMatch) return parseInt(idMatch[1] || idMatch[2] || idMatch[3] || 1);
+        return 1;
+      };
+      return getNum(a) - getNum(b);
+    });
+
+    const amsData = [];
+    const targetSlots = isExternalSpool ? Math.max(1, trayEntities.length) : (trayEntities.length > 0 ? Math.max(4, trayEntities.length) : 0);
+
+    for (let i = 0; i < targetSlots; i++) {
+      const trayEntity = trayEntities[i];
+
+      if (trayEntity) {
+        const trayState = this._hass.states[trayEntity.entityId];
+        const attr = trayState?.attributes || {};
+
+        const nameStr = attr.name || '';
+        const typeStr = attr.type || '';
+        const stateStr2 = trayState?.state || '';
+        const searchStr = `${nameStr} ${typeStr} ${stateStr2}`;
+
+        const typeMatch = searchStr.match(/\b(PCTG|PETG|PLA|ABS|TPU|ASA|PA-CF|PA|PC|PVA|HIPS|PP|SUPPORT)\b/i);
+        let type = '';
+        if (typeMatch) {
+          type = typeMatch[1].toUpperCase();
+        } else if (typeStr && typeStr !== 'Generic' && typeStr.length <= 8) {
+          type = typeStr.toUpperCase();
+        } else if (nameStr && nameStr !== 'Generic' && nameStr.length <= 8) {
+          type = nameStr.toUpperCase();
+        } else if (nameStr) {
+          type = nameStr.substring(0, 6).toUpperCase();
+        } else {
+          type = typeStr || stateStr2 || '';
+        }
+
+        let color = attr.color || attr.tray_color || '#666666';
+        let isTransparent = false;
+
+        if (color && typeof color === 'string') {
+          if (!color.startsWith('#') && !color.startsWith('rgb')) {
+            color = '#' + color;
+          }
+          if (color.length === 9) {
+            const alphaHex = color.substring(7, 9);
+            color = color.substring(0, 7);
+            if (parseInt(alphaHex, 16) < 128) {
+              isTransparent = true;
+            }
+          }
+        }
+
+        const transparencyKeywords = ['transparent', 'clear', 'translucent', 'durchsichtig', 'klar'];
+        const nameLower = nameStr.toLowerCase();
+        const typeLower = typeStr.toLowerCase();
+        if (transparencyKeywords.some(kw => nameLower.includes(kw) || typeLower.includes(kw))) {
+          isTransparent = true;
+        }
+
+        const remainEnabled = attr.remain_enabled === true;
+        const remainValue = parseFloat(attr.remain ?? attr.remaining ?? 0);
+        const remaining = remainEnabled ? remainValue : (remainValue > 0 ? remainValue : -1);
+
+        const active = attr.active === true || attr.in_use === true;
+        const isEmpty = attr.empty === true ||
+                       !trayState?.state ||
+                       trayState?.state.toLowerCase() === 'empty' ||
+                       trayState?.state === 'unavailable' ||
+                       trayState?.state === 'unknown';
+
+        amsData.push({
+          id: i + 1,
+          type: isEmpty ? '' : type,
+          color: isEmpty ? '#666666' : color,
+          remaining: isEmpty ? 0 : Math.round(remaining),
+          remainEnabled,
+          active,
+          empty: isEmpty,
+          transparent: isEmpty ? false : isTransparent,
+          fullName: attr.name || '',
+          brand: attr.brand || attr.manufacturer || '',
+          nozzleTempMin: attr.nozzle_temp_min || attr.min_nozzle_temp || null,
+          nozzleTempMax: attr.nozzle_temp_max || attr.max_nozzle_temp || null,
+          entityId: trayEntity.entityId
+        });
+      } else if (!isExternalSpool && i < 4) {
+        amsData.push({
+          id: i + 1, type: '', color: '#666666', remaining: 0,
+          active: false, empty: true, transparent: false,
+          fullName: '', brand: '',
+          nozzleTempMin: null, nozzleTempMax: null, entityId: null
+        });
+      }
+    }
+
+    if (amsData.length === 0) return null;
+
+    // Scan for temperature and humidity sensors on this AMS device
+    let temperature = null;
+    let humidity = null;
+
+    for (const entityId in this._hass.entities) {
+      const entityInfo = this._hass.entities[entityId];
+      if (entityInfo.device_id !== amsDeviceId) continue;
+
+      const state = this._hass.states[entityId];
+      const eidLower = entityId.toLowerCase();
+      const tk = entityInfo.translation_key?.toLowerCase() || '';
+
+      if ((eidLower.includes('temperature') || tk.includes('temperature') ||
+           eidLower.includes('temp') || tk.includes('temp')) &&
+          !eidLower.includes('nozzle') && !eidLower.includes('bed')) {
+        const v = parseFloat(state?.state);
+        if (!isNaN(v) && state?.state !== 'unavailable' && state?.state !== 'unknown') {
+          temperature = v;
+        }
+      }
+
+      if (eidLower.includes('humidity') || tk.includes('humidity')) {
+        const sv = state?.state;
+        const uom = state?.attributes?.unit_of_measurement;
+        if (/^[A-E]$/i.test(sv)) {
+          humidity = sv.toUpperCase();
+        } else {
+          const hv = parseFloat(sv);
+          if (!isNaN(hv) && sv !== 'unavailable' && sv !== 'unknown') {
+            if (uom === '%' || uom === 'percent') {
+              humidity = hv;
+            } else if (hv >= 1 && hv <= 5 && Number.isInteger(hv)) {
+              humidity = ['A', 'B', 'C', 'D', 'E'][hv - 1];
+            } else {
+              humidity = hv;
+            }
+          }
+        }
+      }
+    }
+
+    return { name: displayName, deviceId: amsDeviceId, amsData, isExternalSpool, temperature, humidity };
+  }
+
+  _renderAmsSlotsHtml(slots, spoolView, amsName) {
+    return `
+        <div class="ams-grid ${slots.length <= 3 ? 'slots-' + slots.length : ''} ${spoolView === 'front' ? 'front-view' : ''}">
+            ${slots.map(slot => `
+                <div class="ams-slot ${slot.active ? 'active' : ''} ${!slot.empty ? 'clickable' : ''} ${slot.transparent ? 'transparent' : ''} ${spoolView === 'front' ? 'front-view' : ''}"
+                     ${!slot.empty ? `data-slot-id="${slot.id}"
+                     data-full-name="${(slot.fullName || '').replace(/"/g, '&quot;')}"
+                     data-type="${slot.type}"
+                     data-color="${slot.color}"
+                     data-remaining="${slot.remaining}"
+                     data-brand="${(slot.brand || '').replace(/"/g, '&quot;')}"
+                     data-temp-min="${slot.nozzleTempMin || ''}"
+                     data-temp-max="${slot.nozzleTempMax || ''}"
+                     data-transparent="${slot.transparent || false}"
+                     data-entity-id="${slot.entityId || ''}"
+                     data-ams-name="${(amsName || '').replace(/"/g, '&quot;')}"` : ''}>
+                    ${spoolView === 'front' ? `
+                    ${!slot.empty ? `
+                    <div class="spool-front-container">
+                        <div class="spool-front-wrapper">
+                            <div class="spool-front-flange left"></div>
+                            <div class="spool-front-flange right"></div>
+                            <div class="spool-front-filament ${slot.color === '#000000' || slot.color === '#111111' ? 'dark-filament' : ''}" style="background-color: ${slot.color};">
+                                <div class="spool-front-ridges"></div>
+                                <div class="spool-front-helix"></div>
+                                <div class="spool-front-sheen"></div>
+                                <div class="spool-front-volume"></div>
+                                <div class="spool-front-volume-shadow"></div>
+                                <div class="spool-front-specular"></div>
+                                <div class="spool-front-ao-top"></div>
+                                <div class="spool-front-ao-bottom"></div>
+                                <div class="spool-front-ao-corners"></div>
+                                <div class="spool-front-label">
+                                    <span class="spool-front-label-type">${slot.type}</span>
+                                    ${slot.remaining >= 0 ? `<span class="spool-front-label-weight">${slot.remaining}%</span>` : ''}
+                                </div>
+                            </div>
+                            ${slot.active ? `<div class="filament-lead" style="background: linear-gradient(180deg, ${slot.color}, rgba(0,0,0,0.45));"></div>` : ''}
+                        </div>
+                    </div>
+                    ` : ''}
+                    <div class="ams-info">
+                        <div class="ams-type">${slot.empty ? 'Empty' : slot.type}</div>
+                    </div>
+                    ` : `
+                    <div class="spool-visual">
+                        ${!slot.empty ? `
+                            <div class="filament" style="background-color: ${slot.color}"></div>
+                            <div class="remaining-badge">${slot.remaining < 0 ? '?' : slot.remaining + '%'}</div>
+                        ` : ''}
+                        <div class="spool-center"></div>
+                    </div>
+                    <div class="ams-info">
+                        <div class="ams-type">${slot.empty ? 'Empty' : slot.type}</div>
+                    </div>
+                    `}
+                </div>
+            `).join('')}
+        </div>`;
+  }
+
+  _renderAmsInfoBarHtml(temperature, humidity, showAmsInfo, unitIdx) {
+    if (!showAmsInfo || (temperature === null && humidity === null)) return '';
+    return `
+        <div class="ams-info-bar" ${unitIdx !== '' ? `data-ams-unit="${unitIdx}"` : ''}>
+            ${temperature !== null ? `
+            <div class="ams-info-pill temp" data-pill="ams-temp">
+                <div class="ams-pill-icon"><ha-icon icon="mdi:thermometer"></ha-icon></div>
+                <div class="ams-pill-content">
+                    <span class="ams-pill-value">${Math.round(temperature)}°C</span>
+                    <span class="ams-pill-label">AMS</span>
+                </div>
+            </div>
+            ` : ''}
+            ${humidity !== null ? `
+            <div class="ams-info-pill humidity" data-pill="ams-humidity">
+                <div class="ams-pill-icon"><ha-icon icon="mdi:water-percent"></ha-icon></div>
+                <div class="ams-pill-content">
+                    <span class="ams-pill-value">${typeof humidity === 'number' ? Math.round(humidity) + '%' : humidity}</span>
+                    <span class="ams-pill-label">AMS</span>
+                </div>
+            </div>
+            ` : ''}
+        </div>`;
+  }
+
+  _getAllAmsUnits() {
+    if (!this._hass) return [];
+    const keys = ['ams_device', 'ams_device_2', 'ams_device_3', 'ams_device_4'];
+    const nameKeys = ['ams_device_name', 'ams_device_2_name', 'ams_device_3_name', 'ams_device_4_name'];
+    const units = [];
+    keys.forEach((key, idx) => {
+      const deviceId = this.config[key];
+      if (deviceId) {
+        const unit = this._getAmsUnitData(deviceId, idx);
+        if (unit) {
+          const customName = this.config[nameKeys[idx]];
+          if (customName && customName.trim()) {
+            unit.name = customName.trim();
+          }
+          units.push(unit);
+        }
+      }
+    });
+    return units;
+  }
+
   getPrinterData() {
     if (!this._hass || !this.config) {
       return this.getPreviewData();
@@ -3840,303 +4277,15 @@ class PrismBambuCard extends HTMLElement {
     // Supports both .png and .jpg formats
     const printerImg = this.config.image || '/local/community/Prism-Dashboard/images/printer-blank.jpg';
 
-    // AMS Data - ONLY use manually configured AMS device (no auto-detect)
-    let amsData = [];
-    let foundAnyAms = false;
-    const trayEntities = [];
-    let isExternalSpool = false;
+    // AMS Data - collect from all configured AMS devices
+    const amsUnits = this._getAllAmsUnits();
     
-    // Helper function to check if entity is a tray/slot entity
-    const isTrayEntity = (entityInfo, entityId) => {
-      // Check translation_key for tray_1, tray_2, etc. (ha-bambulab style)
-      if (entityInfo.translation_key && /^tray_\d+$/.test(entityInfo.translation_key)) {
-        return true;
-      }
-      // Check entity_id for slot or tray (some integrations use slot instead of tray)
-      if (entityId.includes('_slot_') || entityId.includes('_tray_')) {
-        return true;
-      }
-      return false;
-    };
-    
-    // ONLY look for AMS if explicitly configured
-    if (this.config.ams_device) {
-      const amsDeviceId = this.config.ams_device;
-      const amsDevice = this._hass.devices?.[amsDeviceId];
-      const amsModel = amsDevice?.model || '';
-      const amsName = amsDevice?.name || '';
-      
-      // Check if this is an External Spool device
-      isExternalSpool = amsModel.toLowerCase().includes('external spool') || 
-                        amsName.toLowerCase().includes('externalspool');
-      
-      PrismBambuCard.log('AMS device:', amsName, 'model:', amsModel, 'isExternalSpool:', isExternalSpool);
-      
-      if (isExternalSpool) {
-        // External Spool: The device itself contains filament info
-        // Look for sensor entities on this device that have filament attributes
-        for (const entityId in this._hass.entities) {
-          const entityInfo = this._hass.entities[entityId];
-          if (entityInfo.device_id === amsDeviceId) {
-            // Check if this entity has filament-related attributes
-            const state = this._hass.states[entityId];
-            const attr = state?.attributes || {};
-            
-            // External Spool sensor typically has color, type, name attributes
-            if (attr.color || attr.type || attr.name || entityId.includes('sensor.')) {
-              // This looks like a filament entity
-              if (!trayEntities.find(e => e.entityId === entityId)) {
-                trayEntities.push({
-                  entityId,
-                  translationKey: entityInfo.translation_key || 'external_spool',
-                  ...entityInfo
-                });
-                PrismBambuCard.log('Found External Spool entity:', entityId);
-                break; // External spool has only one sensor per device
-              }
-            }
-          }
-        }
-      } else {
-        // Regular AMS: Look for tray entities
-        for (const entityId in this._hass.entities) {
-          const entityInfo = this._hass.entities[entityId];
-          if (entityInfo.device_id === amsDeviceId && isTrayEntity(entityInfo, entityId)) {
-            trayEntities.push({
-              entityId,
-              translationKey: entityInfo.translation_key || entityId,
-              ...entityInfo
-            });
-          }
-        }
-      }
-      
-      // Sort tray entities by their slot/tray number
-      trayEntities.sort((a, b) => {
-        const getNum = (e) => {
-          const tkMatch = e.translationKey?.match(/(\d+)$/);
-          if (tkMatch) return parseInt(tkMatch[1]);
-          const idMatch = e.entityId?.match(/slot_(\d+)|tray_(\d+)|spool(\d*)/i);
-          if (idMatch) return parseInt(idMatch[1] || idMatch[2] || idMatch[3] || 1);
-          return 1;
-        };
-        return getNum(a) - getNum(b);
-      });
-    }
-    
-    // Debug: Log found entities
-    if (trayEntities.length > 0) {
-      PrismBambuCard.log('Found tray/spool entities:', trayEntities.map(e => e.entityId));
-      const firstState = this._hass.states[trayEntities[0].entityId];
-      PrismBambuCard.log('First entity full state:', firstState);
-    } else if (this.config.ams_device) {
-      PrismBambuCard.log('No tray entities found for AMS device');
-    }
-    
-    // Build AMS data from found tray entities
-    // For External Spool: only show actual slots found (1 or 2)
-    // For full AMS: show 4 slots (fill with empty if needed)
-    const targetSlots = isExternalSpool ? Math.max(1, trayEntities.length) : (trayEntities.length > 0 ? Math.max(4, trayEntities.length) : 0);
-    
-    for (let i = 0; i < targetSlots; i++) {
-      const trayEntity = trayEntities[i];
-      
-      if (trayEntity) {
-        foundAnyAms = true;
-        const trayState = this._hass.states[trayEntity.entityId];
-        const attr = trayState?.attributes || {};
-        
-        // Debug slot attributes
-        if (i === 0) {
-          PrismBambuCard.log('Slot 1 attributes:', JSON.stringify(attr));
-        }
-        PrismBambuCard.log(`Slot ${i + 1} - name: "${attr.name}", type: "${attr.type}", state: "${trayState?.state}"`);
-        
-        // ha-bambulab-cards uses attr.name for display (e.g. "Bambu PCTG Basic", "Bambu TPU for AMS")
-        // We need to extract the filament type from name first, then type, then state
-        const nameStr = attr.name || '';
-        const typeStr = attr.type || '';
-        const stateStr = trayState?.state || '';
-        
-        // Combine all sources to search for known filament types
-        const searchStr = `${nameStr} ${typeStr} ${stateStr}`;
-        
-        // Extract short type name - support common filament types
-        // Order matters: check specific types before generic ones
-        const typeMatch = searchStr.match(/\b(PCTG|PETG|PLA|ABS|TPU|ASA|PA-CF|PA|PC|PVA|HIPS|PP|SUPPORT)\b/i);
-        let type = '';
-        if (typeMatch) {
-          type = typeMatch[1].toUpperCase();
-        } else if (typeStr && typeStr !== 'Generic' && typeStr.length <= 8) {
-          // Use type if it's short and not "Generic"
-          type = typeStr.toUpperCase();
-        } else if (nameStr && nameStr !== 'Generic' && nameStr.length <= 8) {
-          // Use name if short
-          type = nameStr.toUpperCase();
-        } else if (nameStr) {
-          // Shorten long names
-          type = nameStr.substring(0, 6).toUpperCase();
-        } else {
-          type = typeStr || stateStr || '';
-        }
-        
-        // Get color - may be 8 chars with alpha (#RRGGBBAA)
-        let color = attr.color || attr.tray_color || '#666666';
-        let alphaHex = 'FF'; // Default: fully opaque
-        let isTransparent = false;
-        
-        if (color && typeof color === 'string') {
-          // Add # if missing
-          if (!color.startsWith('#') && !color.startsWith('rgb')) {
-            color = '#' + color;
-          }
-          // Extract alpha channel if present (8 char format)
-          if (color.length === 9) {
-            alphaHex = color.substring(7, 9); // Get last 2 chars (alpha)
-            color = color.substring(0, 7); // RGB part
-            
-            // Check if transparent (alpha < 128 = 50%)
-            const alphaDecimal = parseInt(alphaHex, 16);
-            if (alphaDecimal < 128) {
-              isTransparent = true;
-            }
-          }
-        }
-        
-        // Bambu Lab doesn't always use alpha channel for transparency
-        // Check name/type for transparency keywords (nameStr and typeStr already defined above)
-        const transparencyKeywords = ['transparent', 'clear', 'translucent', 'durchsichtig', 'klar'];
-        const nameLower = nameStr.toLowerCase();
-        const typeLower = typeStr.toLowerCase();
-        
-        if (transparencyKeywords.some(keyword => nameLower.includes(keyword) || typeLower.includes(keyword))) {
-          isTransparent = true;
-        }
-        
-        // Get remaining percentage
-        // remain_enabled indicates if RFID tracking is active
-        const remainEnabled = attr.remain_enabled === true;
-        const remainValue = parseFloat(attr.remain ?? attr.remaining ?? 0);
-        // If remain_enabled is false or not set, show "?" instead of potentially wrong 0%
-        const remaining = remainEnabled ? remainValue : (remainValue > 0 ? remainValue : -1); // -1 = unknown
-        
-        // Check if active
-        const active = attr.active === true || attr.in_use === true;
-        
-        // Check if empty
-        const isEmpty = attr.empty === true || 
-                       !trayState?.state || 
-                       trayState?.state.toLowerCase() === 'empty' || 
-                       trayState?.state === 'unavailable' || 
-                       trayState?.state === 'unknown';
-        
-        amsData.push({
-          id: i + 1,
-          type: isEmpty ? '' : type,
-          color: isEmpty ? '#666666' : color,
-          remaining: isEmpty ? 0 : Math.round(remaining),
-          remainEnabled: remainEnabled,
-          active,
-          empty: isEmpty,
-          transparent: isEmpty ? false : isTransparent,
-          // Full filament info for popup
-          fullName: attr.name || '',
-          brand: attr.brand || attr.manufacturer || '',
-          nozzleTempMin: attr.nozzle_temp_min || attr.min_nozzle_temp || null,
-          nozzleTempMax: attr.nozzle_temp_max || attr.max_nozzle_temp || null,
-          entityId: trayEntity.entityId
-        });
-      } else if (!isExternalSpool && i < 4) {
-        // Fill empty slots up to 4 only for full AMS (not external spool)
-        amsData.push({
-          id: i + 1,
-          type: '',
-          color: '#666666',
-          remaining: 0,
-          active: false,
-          empty: true,
-          transparent: false,
-          fullName: '',
-          brand: '',
-          nozzleTempMin: null,
-          nozzleTempMax: null,
-          entityId: null
-        });
-      }
-    }
-    
-    // Debug: Log final AMS data
-    PrismBambuCard.log('Final AMS data:', amsData, 'isExternalSpool:', isExternalSpool, 'ams_device configured:', !!this.config.ams_device);
-    
-    // If no AMS device configured OR no entities found, hide section
-    if (!this.config.ams_device || amsData.length === 0) {
-      PrismBambuCard.log('No AMS configured or no data, hiding AMS section');
-      amsData = []; // Empty = hide section
-    }
-    
-    // Get AMS temperature and humidity (from AMS device entities)
-    let amsTemperature = null;
-    let amsHumidity = null;
-    
-    if (this.config.ams_device) {
-      const amsDeviceId = this.config.ams_device;
-      
-      // Look for temperature and humidity sensors belonging to the AMS device
-      for (const entityId in this._hass.entities) {
-        const entityInfo = this._hass.entities[entityId];
-        if (entityInfo.device_id === amsDeviceId) {
-          const state = this._hass.states[entityId];
-          const entityIdLower = entityId.toLowerCase();
-          const translationKey = entityInfo.translation_key?.toLowerCase() || '';
-          
-          // Check for temperature sensor
-          if ((entityIdLower.includes('temperature') || translationKey.includes('temperature') || 
-               entityIdLower.includes('temp') || translationKey.includes('temp')) &&
-              !entityIdLower.includes('nozzle') && !entityIdLower.includes('bed')) {
-            const tempValue = parseFloat(state?.state);
-            if (!isNaN(tempValue) && state?.state !== 'unavailable' && state?.state !== 'unknown') {
-              amsTemperature = tempValue;
-              PrismBambuCard.log('Found AMS temperature:', amsTemperature, 'from', entityId);
-            }
-          }
-          
-          // Check for humidity sensor
-          if (entityIdLower.includes('humidity') || translationKey.includes('humidity')) {
-            const stateValue = state?.state;
-            const unitOfMeasurement = state?.attributes?.unit_of_measurement;
-            
-            // Check for A-E letters first (some systems output letters directly)
-            if (/^[A-E]$/i.test(stateValue)) {
-              amsHumidity = stateValue.toUpperCase(); // String: "A", "B", "C", "D", "E"
-              PrismBambuCard.log('Found AMS humidity (letter):', amsHumidity, 'from', entityId);
-            }
-            // Try parsing as number
-            else {
-              const humValue = parseFloat(stateValue);
-              if (!isNaN(humValue) && stateValue !== 'unavailable' && stateValue !== 'unknown') {
-                // Check if this is a real percentage sensor (has % unit) or index sensor (no unit)
-                // Older AMS systems output 1-5 as humidity index WITHOUT unit
-                // Newer systems with real sensors have % as unit_of_measurement
-                if (unitOfMeasurement === '%' || unitOfMeasurement === 'percent') {
-                  // Real percentage value from newer systems (e.g. 45%)
-              amsHumidity = humValue;
-                  PrismBambuCard.log('Found AMS humidity (percent):', amsHumidity, '% from', entityId);
-                } else if (humValue >= 1 && humValue <= 5 && Number.isInteger(humValue)) {
-                  // No unit and value 1-5 = index for A-E (older systems)
-                  const levels = ['A', 'B', 'C', 'D', 'E'];
-                  amsHumidity = levels[humValue - 1];
-                  PrismBambuCard.log('Found AMS humidity (index):', humValue, '→', amsHumidity, 'from', entityId);
-                } else {
-                  // Fallback: treat as percentage if > 5 or has decimals
-                  amsHumidity = humValue;
-                  PrismBambuCard.log('Found AMS humidity (fallback numeric):', amsHumidity, 'from', entityId);
-                }
-              }
-            }
-          }
-        }
-      }
-    }
+    // Backward-compatible flat data from first unit (or empty) for single-AMS behavior
+    const firstUnit = amsUnits.length > 0 ? amsUnits[0] : null;
+    const amsData = amsUnits.length === 1 ? firstUnit.amsData : (amsUnits.length > 1 ? amsUnits.flatMap(u => u.amsData) : []);
+    const isExternalSpool = amsUnits.length === 1 ? firstUnit.isExternalSpool : false;
+    const amsTemperature = firstUnit?.temperature ?? null;
+    const amsHumidity = firstUnit?.humidity ?? null;
 
     const returnData = {
       stateStr,
@@ -4163,6 +4312,8 @@ class PrismBambuCard extends HTMLElement {
       showCoverImage: this.config.show_cover_image && coverImageUrl,
       amsData,
       isExternalSpool,
+      amsUnits,
+      amsView: this.config.ams_view || 'tabs',
       isPrinting,
       isPaused,
       isIdle,
@@ -4236,6 +4387,20 @@ class PrismBambuCard extends HTMLElement {
         { id: 4, type: 'TPU', color: '#FFFFFF', remaining: 0, active: false, empty: true }
       ],
       isExternalSpool: false,
+      amsUnits: [{
+        name: 'AMS',
+        deviceId: null,
+        amsData: [
+          { id: 1, type: 'PLA', color: '#FF4444', remaining: 85, active: false },
+          { id: 2, type: 'PETG', color: '#4488FF', remaining: 42, active: true },
+          { id: 3, type: 'ABS', color: '#111111', remaining: 12, active: false },
+          { id: 4, type: 'TPU', color: '#FFFFFF', remaining: 0, active: false, empty: true }
+        ],
+        isExternalSpool: false,
+        temperature: 25,
+        humidity: 45
+      }],
+      amsView: this.config?.ams_view || 'tabs',
       isPrinting: true,
       isPaused: false,
       isIdle: false,
@@ -4519,6 +4684,57 @@ class PrismBambuCard extends HTMLElement {
         }
         .ams-grid.hidden {
             display: none;
+        }
+
+        /* Multi-AMS Tab Bar */
+        .ams-tab-bar {
+            display: flex;
+            justify-content: center;
+            gap: 6px;
+            margin-bottom: 14px;
+            padding: 0 16px;
+        }
+        .ams-tab {
+            background: rgba(255, 255, 255, 0.06);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            border-radius: 999px;
+            padding: 5px 14px;
+            color: rgba(255, 255, 255, 0.5);
+            font-size: 11px;
+            font-weight: 500;
+            letter-spacing: 0.3px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            font-family: inherit;
+        }
+        .ams-tab:hover {
+            background: rgba(255, 255, 255, 0.1);
+            color: rgba(255, 255, 255, 0.8);
+        }
+        .ams-tab.active {
+            background: rgba(59, 130, 246, 0.2);
+            border-color: rgba(59, 130, 246, 0.4);
+            color: #60a5fa;
+        }
+        .ams-tab-content.hidden {
+            display: none;
+        }
+
+        /* Stacked Mode */
+        .ams-unit {
+            margin-bottom: 8px;
+        }
+        .ams-unit:last-child {
+            margin-bottom: 0;
+        }
+        .ams-unit-label {
+            font-size: 11px;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.8px;
+            color: rgba(255, 255, 255, 0.4);
+            text-align: center;
+            margin-bottom: 8px;
         }
         
         /* AMS Info Pills (Temperature & Humidity) - same style as overlay-pills */
@@ -5704,88 +5920,30 @@ class PrismBambuCard extends HTMLElement {
         </div>
 
         ${data.amsData.length > 0 ? `
-        <div class="ams-grid ${data.amsData.length <= 3 ? 'slots-' + data.amsData.length : ''} ${data.spoolView === 'front' ? 'front-view' : ''}">
-            ${data.amsData.map(slot => `
-                <div class="ams-slot ${slot.active ? 'active' : ''} ${!slot.empty ? 'clickable' : ''} ${slot.transparent ? 'transparent' : ''} ${data.spoolView === 'front' ? 'front-view' : ''}"
-                     ${!slot.empty ? `data-slot-id="${slot.id}"
-                     data-full-name="${(slot.fullName || '').replace(/"/g, '&quot;')}"
-                     data-type="${slot.type}"
-                     data-color="${slot.color}"
-                     data-remaining="${slot.remaining}"
-                     data-brand="${(slot.brand || '').replace(/"/g, '&quot;')}"
-                     data-temp-min="${slot.nozzleTempMin || ''}"
-                     data-temp-max="${slot.nozzleTempMax || ''}"
-                     data-transparent="${slot.transparent || false}"
-                     data-entity-id="${slot.entityId || ''}"` : ''}>
-                    ${data.spoolView === 'front' ? `
-                    <!-- Front View (AMS-Style vertical spools) -->
-                    ${!slot.empty ? `
-                    <div class="spool-front-container">
-                        <div class="spool-front-wrapper">
-                            <div class="spool-front-flange left"></div>
-                            <div class="spool-front-flange right"></div>
-                            <div class="spool-front-filament ${slot.color === '#000000' || slot.color === '#111111' ? 'dark-filament' : ''}" style="background-color: ${slot.color};">
-                                <div class="spool-front-ridges"></div>
-                                <div class="spool-front-helix"></div>
-                                <div class="spool-front-sheen"></div>
-                                <div class="spool-front-volume"></div>
-                                <div class="spool-front-volume-shadow"></div>
-                                <div class="spool-front-specular"></div>
-                                <div class="spool-front-ao-top"></div>
-                                <div class="spool-front-ao-bottom"></div>
-                                <div class="spool-front-ao-corners"></div>
-                                <!-- Labels inside filament -->
-                                <div class="spool-front-label">
-                                    <span class="spool-front-label-type">${slot.type}</span>
-                                    ${slot.remaining >= 0 ? `<span class="spool-front-label-weight">${slot.remaining}%</span>` : ''}
-                                </div>
-                            </div>
-                            ${slot.active ? `<div class="filament-lead" style="background: linear-gradient(180deg, ${slot.color}, rgba(0,0,0,0.45));"></div>` : ''}
-                        </div>
-                    </div>
-                    ` : ''}
-                    <div class="ams-info">
-                        <div class="ams-type">${slot.empty ? 'Empty' : slot.type}</div>
-                    </div>
-                    ` : `
-                    <!-- Side View (circular spool - default) -->
-                    <div class="spool-visual">
-                        ${!slot.empty ? `
-                            <div class="filament" style="background-color: ${slot.color}"></div>
-                            <div class="remaining-badge">${slot.remaining < 0 ? '?' : slot.remaining + '%'}</div>
-                        ` : ''}
-                        <div class="spool-center"></div>
-                    </div>
-                    <div class="ams-info">
-                        <div class="ams-type">${slot.empty ? 'Empty' : slot.type}</div>
-                    </div>
-                    `}
-                </div>
+        ${data.amsUnits.length <= 1 ? `
+        ${this._renderAmsSlotsHtml(data.amsData, data.spoolView, '')}
+        ${this._renderAmsInfoBarHtml(data.amsTemperature, data.amsHumidity, data.showAmsInfo, '')}
+        ` : data.amsView === 'stacked' ? `
+        ${data.amsUnits.map((unit, idx) => `
+        <div class="ams-unit" data-ams-unit="${idx}">
+            <div class="ams-unit-label">${unit.name}</div>
+            ${this._renderAmsSlotsHtml(unit.amsData, data.spoolView, unit.name)}
+            ${this._renderAmsInfoBarHtml(unit.temperature, unit.humidity, data.showAmsInfo, idx)}
+        </div>
+        `).join('')}
+        ` : `
+        <div class="ams-tab-bar">
+            ${data.amsUnits.map((unit, idx) => `
+            <button class="ams-tab ${idx === this._activeAmsUnit ? 'active' : ''}" data-ams-tab="${idx}">${unit.name}</button>
             `).join('')}
         </div>
-        
-        ${data.showAmsInfo && (data.amsTemperature !== null || data.amsHumidity !== null) ? `
-        <div class="ams-info-bar">
-            ${data.amsTemperature !== null ? `
-            <div class="ams-info-pill temp" data-pill="ams-temp">
-                <div class="ams-pill-icon"><ha-icon icon="mdi:thermometer"></ha-icon></div>
-                <div class="ams-pill-content">
-                    <span class="ams-pill-value">${Math.round(data.amsTemperature)}°C</span>
-                    <span class="ams-pill-label">AMS</span>
-                </div>
-            </div>
-            ` : ''}
-            ${data.amsHumidity !== null ? `
-            <div class="ams-info-pill humidity" data-pill="ams-humidity">
-                <div class="ams-pill-icon"><ha-icon icon="mdi:water-percent"></ha-icon></div>
-                <div class="ams-pill-content">
-                    <span class="ams-pill-value">${typeof data.amsHumidity === 'number' ? Math.round(data.amsHumidity) + '%' : data.amsHumidity}</span>
-                    <span class="ams-pill-label">AMS</span>
-                </div>
-            </div>
-            ` : ''}
+        ${data.amsUnits.map((unit, idx) => `
+        <div class="ams-tab-content ${idx === this._activeAmsUnit ? '' : 'hidden'}" data-ams-tab-content="${idx}">
+            ${this._renderAmsSlotsHtml(unit.amsData, data.spoolView, unit.name)}
+            ${this._renderAmsInfoBarHtml(unit.temperature, unit.humidity, data.showAmsInfo, idx)}
         </div>
-        ` : ''}
+        `).join('')}
+        `}
         
         <!-- Filament Info Popup -->
         <div class="filament-popup-overlay" style="display: none;">
