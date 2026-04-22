@@ -3,7 +3,7 @@
  * https://github.com/BangerTech/Prism-Dashboard
  * 
  * Version: 1.5.9
- * Build Date: 2026-04-17T16:30:25.621Z
+ * Build Date: 2026-04-22T08:35:17.205Z
  * 
  * This file contains all Prism custom cards bundled together.
  * Just add this single file as a resource in Lovelace:
@@ -14093,7 +14093,7 @@ class PrismLedCard extends HTMLElement {
         const color = this.getDisplayColor();
         
         if(center) center.style.backgroundColor = color;
-        if(text) text.textContent = this.mode === 'color' ? this.localColor : (this.localTemp > 50 ? 'KALT' : 'WARM');
+        if(text) text.textContent = this.mode === 'color' ? this.localColor : (this.localTemp > 50 ? 'COOL' : 'WARM');
         if(text && this.mode === 'white') text.style.color = color;
         else if(text) text.style.color = '';
         
@@ -14438,7 +14438,7 @@ class PrismLedCard extends HTMLElement {
               <div class="wheel-center">
                   <div class="wheel-center-bg" id="wheel-center-color"></div>
                   <ha-icon icon="${this.mode === 'color' ? 'mdi:palette' : 'mdi:thermometer'}" class="wheel-icon" id="wheel-icon"></ha-icon>
-                  ${isOn ? `<span class="wheel-text" id="wheel-text">${this.mode === 'color' ? this.localColor : (this.localTemp > 50 ? 'KALT' : 'WARM')}</span>` : ''}
+                  ${isOn ? `<span class="wheel-text" id="wheel-text">${this.mode === 'color' ? this.localColor : (this.localTemp > 50 ? 'COOL' : 'WARM')}</span>` : ''}
               </div>
           </div>
           
@@ -14829,7 +14829,7 @@ class PrismLedLightCard extends HTMLElement {
         const color = this.getDisplayColor();
         
         if(center) center.style.backgroundColor = color;
-        if(text) text.textContent = this.mode === 'color' ? this.localColor : (this.localTemp > 50 ? 'KALT' : 'WARM');
+        if(text) text.textContent = this.mode === 'color' ? this.localColor : (this.localTemp > 50 ? 'COOL' : 'WARM');
         if(text && this.mode === 'white') text.style.color = color;
         else if(text) text.style.color = '';
         
@@ -15077,7 +15077,7 @@ class PrismLedLightCard extends HTMLElement {
               <div class="wheel-center">
                   <div class="wheel-center-bg" id="wheel-center-color"></div>
                   <ha-icon icon="${this.mode === 'color' ? 'mdi:palette' : 'mdi:thermometer'}" class="wheel-icon" id="wheel-icon"></ha-icon>
-                  ${isOn ? `<span class="wheel-text" id="wheel-text">${this.mode === 'color' ? this.localColor : (this.localTemp > 50 ? 'KALT' : 'WARM')}</span>` : ''}
+                  ${isOn ? `<span class="wheel-text" id="wheel-text">${this.mode === 'color' ? this.localColor : (this.localTemp > 50 ? 'COOL' : 'WARM')}</span>` : ''}
               </div>
           </div>
           
